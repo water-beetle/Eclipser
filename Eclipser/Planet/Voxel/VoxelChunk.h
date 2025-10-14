@@ -30,7 +30,8 @@ public:
 	UVoxelChunk();
 
 	void Build(const FChunkSettingInfo& Info);
-	void SetVoxelManager(UVoxelManager* VoxelManager){ OwningManager = VoxelManager; };
+	void SetVoxelManager(UVoxelManager* VoxelManager){ OwningManager = VoxelManager; }
+	void Sculpt(const FVector_NetQuantize& ImpactPoint);;
 
 protected:
 	// Called when the game starts

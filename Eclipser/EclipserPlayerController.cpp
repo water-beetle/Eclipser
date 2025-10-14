@@ -5,6 +5,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
 #include "InputMappingContext.h"
+#include "InputActionValue.h"
 #include "Blueprint/UserWidget.h"
 #include "Eclipser.h"
 #include "Widgets/Input/SVirtualJoystick.h"
@@ -13,6 +14,13 @@ void AEclipserPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
+	bShowMouseCursor = true;
+	bEnableClickEvents = true;
+	bEnableMouseOverEvents = true;
+
+	SetInputMode(FInputModeGameOnly());
+
+	
 	// only spawn touch controls on local player controllers
 	if (SVirtualJoystick::ShouldDisplayTouchInterface() && IsLocalPlayerController())
 	{

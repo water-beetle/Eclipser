@@ -8,6 +8,7 @@
 
 class UInputMappingContext;
 class UUserWidget;
+class UInputAction;
 
 /**
  *  Basic PlayerController class for a third person game
@@ -27,6 +28,10 @@ protected:
 	/** Input Mapping Contexts */
 	UPROPERTY(EditAnywhere, Category="Input|Input Mappings")
 	TArray<UInputMappingContext*> MobileExcludedMappingContexts;
+
+	/** Mouse Click Input Action */
+	UPROPERTY(EditAnywhere, Category="Input")
+	UInputAction* MouseClickAction;
 
 	/** Mobile controls widget to spawn */
 	UPROPERTY(EditAnywhere, Category="Input|Touch Controls")

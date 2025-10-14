@@ -21,6 +21,11 @@ void UVoxelChunk::Build(const FChunkSettingInfo& Info)
 	UpdateMesh(CachedMeshData);
 }
 
+void UVoxelChunk::Sculpt(const FVector_NetQuantize& ImpactPoint)
+{
+	
+}
+
 // Called when the game starts
 void UVoxelChunk::BeginPlay()
 {

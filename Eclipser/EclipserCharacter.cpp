@@ -11,9 +11,12 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "Eclipser.h"
+#include "Planet/Voxel/VoxelChunk.h"
 
 AEclipserCharacter::AEclipserCharacter()
 {
+	PrimaryActorTick.bCanEverTick = true;
+	
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
 		
@@ -65,11 +68,21 @@ void AEclipserCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 
 		// Looking
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AEclipserCharacter::Look);
+
+		EnhancedInputComponent->BindAction(DigAction, ETriggerEvent::Started, this, &AEclipserCharacter::OnDigPressed);
+		EnhancedInputComponent->BindAction(DigAction, ETriggerEvent::Completed, this, &AEclipserCharacter::OnDigReleased);
+		
 	}
 	else
 	{
 		UE_LOG(LogEclipser, Error, TEXT("'%s' Failed to find an Enhanced Input component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
 	}
+}
+
+void AEclipserCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
 }
 
 void AEclipserCharacter::Move(const FInputActionValue& Value)
@@ -89,6 +102,56 @@ void AEclipserCharacter::Look(const FInputActionValue& Value)
 	// route the input
 	DoLook(LookAxisVector.X, LookAxisVector.Y);
 }
+
+void AEclipserCharacter::OnDigPressed()
+{
+	if (GetWorldTimerManager().IsTimerActive(DigTimerHandle))
+		return;
+	
+	GetWorldTimerManager().SetTimer(
+		DigTimerHandle,
+		this,
+		&AEclipserCharacter::PerformDig,
+		DigInterval,
+		true // 반복 실행
+	);
+	
+	PerformDig();
+}
+
+void AEclipserCharacter::OnDigReleased()
+{
+	GetWorldTimerManager().ClearTimer(DigTimerHandle);
+}
+
+void AEclipserCharacter::PerformDig()
+{
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC) return;
+
+	// 트레이스 시도
+	FHitResult Hit;
+	if (!PC->GetHitResultUnderCursorByChannel(UEngineTypes::ConvertToTraceType(DigTraceChannel), /*bTraceComplex*/ false, Hit))
+		return;
+
+	if (!Hit.bBlockingHit)
+		return;
+
+	const FVector MyLoc = GetActorLocation();
+	const float Dist = FVector::Dist(MyLoc, Hit.ImpactPoint);
+	if (Dist > MaxDigDistance)
+		return;
+
+	if (UVoxelChunk* Chunk = Cast<UVoxelChunk>(Hit.GetComponent()))
+	{
+		Chunk->Sculpt(Hit.ImpactPoint);
+	}
+
+	
+
+	
+}
+
 
 void AEclipserCharacter::DoMove(float Right, float Forward)
 {

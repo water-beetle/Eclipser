@@ -49,6 +49,9 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input")
 	UInputAction* MouseLookAction;
 
+	UPROPERTY(EditAnywhere, Category="Input")
+	UInputAction* DigAction;
+
 public:
 
 	/** Constructor */
@@ -58,6 +61,7 @@ protected:
 
 	/** Initialize input action bindings */
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	virtual void Tick(float DeltaSeconds) override;
 
 protected:
 
@@ -92,5 +96,27 @@ public:
 
 	/** Returns FollowCamera subobject **/
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
+
+private:
+
+	void OnDigPressed();
+	void OnDigReleased();
+	void PerformDig();
+	
+	FTimerHandle DigTimerHandle;
+
+	UPROPERTY(EditAnywhere, Category="Dig")
+	float DigInterval = 0.3f;
+
+	UPROPERTY(EditAnywhere, Category="Dig")
+	TEnumAsByte<ECollisionChannel> DigTraceChannel = ECC_Visibility;
+
+	UPROPERTY(EditAnywhere, Category="Dig")
+	float MaxDigDistance = 300.f;  // // 플레이어와 파는 지점 간 최대 거리
+
+	UPROPERTY(EditAnywhere, Category="Dig")
+	float DigRadius = 50.0f; // 땅 파는 반경
+
+	
 };
 
