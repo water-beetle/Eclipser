@@ -116,7 +116,5 @@ private:
 
 	UPROPERTY(EditAnywhere, Category="Dig")
 	float DigRadius = 50.0f; // 땅 파는 반경
-
-	
 };
 

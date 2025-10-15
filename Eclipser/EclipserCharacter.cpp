@@ -11,6 +11,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "Eclipser.h"
+#include "Kismet/GameplayStatics.h"
 #include "Planet/Voxel/VoxelChunk.h"
 
 AEclipserCharacter::AEclipserCharacter()
@@ -127,25 +128,21 @@ void AEclipserCharacter::OnDigReleased()
 void AEclipserCharacter::PerformDig()
 {
 	APlayerController* PC = Cast<APlayerController>(GetController());
-	if (!PC) return;
+	if (!IsValid(PC) || !IsValid(GEngine) || !IsValid(GEngine->GameViewport)) return;
+	
+	FVector2D ViewportSize;
+    GEngine->GameViewport->GetViewportSize(ViewportSize);
+    const FVector2D ViewportCenter = ViewportSize / 2.f;
 
-	// 트레이스 시도
-	FHitResult Hit;
-	if (!PC->GetHitResultUnderCursorByChannel(UEngineTypes::ConvertToTraceType(DigTraceChannel), /*bTraceComplex*/ false, Hit))
-		return;
+    FVector TraceStart;
+    FVector Forward;
+    if (!UGameplayStatics::DeprojectScreenToWorld(PC, ViewportCenter, TraceStart, Forward)) return;
 
-	if (!Hit.bBlockingHit)
-		return;
-
-	const FVector MyLoc = GetActorLocation();
-	const float Dist = FVector::Dist(MyLoc, Hit.ImpactPoint);
-	if (Dist > MaxDigDistance)
-		return;
-
-	if (UVoxelChunk* Chunk = Cast<UVoxelChunk>(Hit.GetComponent()))
-	{
-		Chunk->Sculpt(Hit.ImpactPoint);
-	}
+	const FVector TraceEnd = TraceStart + Forward * MaxDigDistance;
+	FHitResult HitResult;
+	GetWorld()->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, DigTraceChannel);
+	
+	
 
 	
 

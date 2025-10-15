@@ -8,17 +8,14 @@
 #include "InputActionValue.h"
 #include "Blueprint/UserWidget.h"
 #include "Eclipser.h"
+#include "Widget/HUD/HUDWidget.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
 void AEclipserPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	bShowMouseCursor = true;
-	bEnableClickEvents = true;
-	bEnableMouseOverEvents = true;
-
-	SetInputMode(FInputModeGameOnly());
+	CreateHUDWidget();
 
 	
 	// only spawn touch controls on local player controllers
@@ -37,7 +34,6 @@ void AEclipserPlayerController::BeginPlay()
 			UE_LOG(LogEclipser, Error, TEXT("Could not spawn mobile controls widget."));
 
 		}
-
 	}
 }
 
@@ -65,5 +61,16 @@ void AEclipserPlayerController::SetupInputComponent()
 				}
 			}
 		}
+	}
+}
+
+void AEclipserPlayerController::CreateHUDWidget()
+{
+	if (!IsLocalPlayerController()) return;
+
+	HudWidget = CreateWidget<UHUDWidget>(this, HUDWidgetClass);
+	if (IsValid(HudWidget))
+	{
+		HudWidget->AddToViewport();
 	}
 }

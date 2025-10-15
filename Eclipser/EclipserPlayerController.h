@@ -6,6 +6,7 @@
 #include "GameFramework/PlayerController.h"
 #include "EclipserPlayerController.generated.h"
 
+class UHUDWidget;
 class UInputMappingContext;
 class UUserWidget;
 class UInputAction;
@@ -45,5 +46,14 @@ protected:
 
 	/** Input mapping context setup */
 	virtual void SetupInputComponent() override;
+
+private:
+	UPROPERTY(EditDefaultsOnly, Category = "UI", meta=(AllowPrivateAccess = true))
+	TSubclassOf<UHUDWidget> HUDWidgetClass;
+	
+	UPROPERTY()
+	TObjectPtr<UHUDWidget> HudWidget;
+
+	void CreateHUDWidget();
 
 };
