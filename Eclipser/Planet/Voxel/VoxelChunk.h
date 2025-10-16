@@ -31,13 +31,13 @@ public:
 
 	void Build(const FChunkSettingInfo& Info);
 	void SetVoxelManager(UVoxelManager* VoxelManager){ OwningManager = VoxelManager; }
-	void Sculpt(const FVector_NetQuantize& ImpactPoint);;
+	UVoxelManager* GetVoxelManager() const {return OwningManager; }
+	void Sculpt(const FVector& ImpactPoint, float radius);;
 
 protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
-	virtual void InitializeComponent() override;
-
+	virtual void OnRegister() override;
 public:
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
@@ -47,7 +47,8 @@ private:
 	FVoxelData CachedMeshData;
 	TArray<FVertexDensity> ChunkDensityData;
 	FVoxelDataMappings Mappings;
-
+	FChunkSettingInfo ChunkInfo;
+	
 	void UpdateMesh(const FVoxelData& VoxelMeshData);
 	void InitializeChunkDensityData(const FChunkSettingInfo& Info);
 	float CalculateDensity(const FVector& Pos, int Radius);

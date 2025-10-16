@@ -142,7 +142,13 @@ void AEclipserCharacter::PerformDig()
 	FHitResult HitResult;
 	GetWorld()->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, DigTraceChannel);
 	
-	
+	if (UVoxelChunk* HitChunk = Cast<UVoxelChunk>(HitResult.GetComponent()))
+	{
+		if (UVoxelManager* Manager = HitChunk->GetVoxelManager())
+		{
+			Manager->Sculpt(HitResult.ImpactPoint, DigRadius);
+		}
+	}
 
 	
 

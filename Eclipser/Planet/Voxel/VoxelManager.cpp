@@ -24,6 +24,7 @@ void UVoxelManager::BeginPlay()
 
 	const double StartTime = FPlatformTime::Seconds();
 
+	// Voxel은 Actor의 Location을 중점으로 생성됨
 	for (int32 x = 0; x < ChunkNum; ++x)
 		for (int32 y = 0; y < ChunkNum; ++y)
 			for (int32 z = 0; z < ChunkNum; ++z)
@@ -68,5 +69,56 @@ UVoxelChunk* UVoxelManager::GetChunk(const FIntVector& Index)
 		return *Ptr;
 	}
 	return nullptr;
+}
+
+void UVoxelManager::Sculpt(const FVector& ImpactPoint, float Radius)
+{
+	// Sculpt 지점과, 반지름에 영향을 받는 Chunk만 다시 Density 계산 후 mesh 재생성
+	
+	if (ChunkNum <= 0 || CellNum <= 0 || CellSize <= 0)
+		return;
+
+	const int ChunkSize = CellSize * CellNum;
+	const float VoxelSize = ChunkSize * ChunkNum;
+	const FVector VoxelMinCorner = GetComponentLocation() - FVector(VoxelSize) * 0.5f;
+
+	const FVector SculptMin = ImpactPoint - FVector(Radius);
+	const FVector SculptMax = ImpactPoint + FVector(Radius);
+
+	auto ComputeMinIndex = [&](float Coordinate, int32 Axis) -> int32
+	{
+		const float Origin = (&VoxelMinCorner.X)[Axis];
+		const float Normalized = (Coordinate - Origin) / ChunkSize;
+		return FMath::Clamp(FMath::FloorToInt(Normalized), 0, ChunkNum - 1);
+	};
+
+	auto ComputeMaxIndex = [&](float Coordinate, int32 Axis) -> int32
+	{
+		const float Origin = VoxelMinCorner[Axis];
+		const float Normalized = (Coordinate - Origin) / ChunkSize;
+		return FMath::Clamp(FMath::CeilToInt(Normalized) - 1, 0, ChunkNum - 1);
+	};
+
+	const int32 StartX = ComputeMinIndex(SculptMin.X, 0);
+	const int32 StartY = ComputeMinIndex(SculptMin.Y, 1);
+	const int32 StartZ = ComputeMinIndex(SculptMin.Z, 2);
+
+	const int32 EndX = ComputeMaxIndex(SculptMax.X, 0);
+	const int32 EndY = ComputeMaxIndex(SculptMax.Y, 1);
+	const int32 EndZ = ComputeMaxIndex(SculptMax.Z, 2);
+
+	for (int32 x = StartX; x <= EndX; ++x)
+	{
+		for (int32 y = StartY; y <= EndY; ++y)
+		{
+			for (int32 z = StartZ; z <= EndZ; ++z)
+			{
+				if (UVoxelChunk* Chunk = GetChunk(FIntVector(x, y, z)))
+				{
+					Chunk->Sculpt(ImpactPoint, Radius);
+				}
+			}
+		}
+	}
 }
 

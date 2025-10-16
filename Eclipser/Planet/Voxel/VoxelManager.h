@@ -34,7 +34,8 @@ public:
 	UPROPERTY(EditAnywhere, Category="Voxel")
 	int ChunkNum;
 
+	void Sculpt(const FVector& ImpactPoint, float Radius);
 private:
-	UPROPERTY()
+	UPROPERTY(VisibleAnywhere, meta=(AllowPrivateAccess = true))
 	TMap<FIntVector, UVoxelChunk*> ChunkMap;
 };

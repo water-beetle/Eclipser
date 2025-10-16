@@ -17,13 +17,82 @@ UVoxelChunk::UVoxelChunk()
 void UVoxelChunk::Build(const FChunkSettingInfo& Info)
 {
 	InitializeChunkDensityData(Info);
+	ChunkInfo = Info;
+	
 	CachedMeshData = MarchingCubeMeshGenerator::GenerateChunkMesh(Info, ChunkDensityData);
 	UpdateMesh(CachedMeshData);
 }
 
-void UVoxelChunk::Sculpt(const FVector_NetQuantize& ImpactPoint)
+void UVoxelChunk::Sculpt(const FVector& ImpactPoint, float Radius)
 {
-	
+	if (ChunkInfo.CellNum <= 0 || ChunkInfo.CellSize <= 0)
+                return;
+
+        const FVector ChunkCenter = GetComponentLocation();
+        const FVector ChunkExtent = FVector(ChunkInfo.ChunkSize) * 0.5f;
+        const FVector ChunkMin = ChunkCenter - ChunkExtent;
+        const FVector ChunkMax = ChunkCenter + ChunkExtent;
+
+        const FVector SphereMin = FVector(ImpactPoint) - FVector(Radius);
+        const FVector SphereMax = FVector(ImpactPoint) + FVector(Radius);
+
+        if (SphereMax.X < ChunkMin.X || SphereMin.X > ChunkMax.X ||
+            SphereMax.Y < ChunkMin.Y || SphereMin.Y > ChunkMax.Y ||
+            SphereMax.Z < ChunkMin.Z || SphereMin.Z > ChunkMax.Z)
+        {
+                return;
+        }
+
+        const float CellSize = static_cast<float>(ChunkInfo.CellSize);
+
+        auto ToMinIndex = [&](float Value, float MinBound) -> int32
+        {
+                const float Normalized = (Value - MinBound) / CellSize;
+                return FMath::Clamp(FMath::FloorToInt(Normalized), 0, ChunkInfo.CellNum);
+        };
+
+        auto ToMaxIndex = [&](float Value, float MinBound) -> int32
+        {
+                const float Normalized = (Value - MinBound) / CellSize;
+                return FMath::Clamp(FMath::CeilToInt(Normalized), 0, ChunkInfo.CellNum);
+        };
+
+        const int32 StartX = ToMinIndex(FMath::Max(SphereMin.X, ChunkMin.X), ChunkMin.X);
+        const int32 StartY = ToMinIndex(FMath::Max(SphereMin.Y, ChunkMin.Y), ChunkMin.Y);
+        const int32 StartZ = ToMinIndex(FMath::Max(SphereMin.Z, ChunkMin.Z), ChunkMin.Z);
+
+        const int32 EndX = ToMaxIndex(FMath::Min(SphereMax.X, ChunkMax.X), ChunkMin.X);
+        const int32 EndY = ToMaxIndex(FMath::Min(SphereMax.Y, ChunkMax.Y), ChunkMin.Y);
+        const int32 EndZ = ToMaxIndex(FMath::Min(SphereMax.Z, ChunkMax.Z), ChunkMin.Z);
+
+        if (StartX > EndX || StartY > EndY || StartZ > EndZ)
+                return;
+
+        const FVector SphereCenter(ImpactPoint);
+        const float RadiusSquared = Radius * Radius;
+
+        for (int32 z = StartZ; z <= EndZ; ++z)
+        {
+                for (int32 y = StartY; y <= EndY; ++y)
+                {
+                        for (int32 x = StartX; x <= EndX; ++x)
+                        {
+                                const int32 VertexIndex = VoxelHelper::GetIndex(x, y, z, ChunkInfo.CellNum);
+                                FVector VertexPosition = ChunkMin + FVector(x, y, z) * CellSize;
+
+                                const float DistanceSquared = FVector::DistSquared(VertexPosition, SphereCenter);
+                                if (DistanceSquared > RadiusSquared)
+                                        continue;
+
+                                const float Distance = FMath::Sqrt(DistanceSquared);
+                                const float TargetDensity = Distance - Radius;
+                                ChunkDensityData[VertexIndex].Density = FMath::Min(ChunkDensityData[VertexIndex].Density, TargetDensity);
+                        }
+                }
+        }
+
+        CachedMeshData = MarchingCubeMeshGenerator::GenerateChunkMesh(ChunkInfo, ChunkDensityData);
+        UpdateMesh(CachedMeshData);
 }
 
 // Called when the game starts
@@ -32,18 +101,17 @@ void UVoxelChunk::BeginPlay()
 	Super::BeginPlay();
 }
 
-void UVoxelChunk::InitializeComponent()
+void UVoxelChunk::OnRegister()
 {
-	Super::InitializeComponent();
+	Super::OnRegister();
 
+	SetCollisionProfileName(TEXT("Dig"));
+	UE_LOG(LogTemp, Warning, TEXT("Profile=%s"), *GetCollisionProfileName().ToString());
 	SetComplexAsSimpleCollisionEnabled(true, true);
-	bUseAsyncCooking = true; // 멀티스레드로 에셋을 병렬 쿠킹하여 속도를 향상시키는 옵션
-	SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	SetGenerateOverlapEvents(true);
-	SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	bUseAsyncCooking = true;
 	SetMobility(EComponentMobility::Movable);
+	SetGenerateOverlapEvents(true);
 }
-
 
 // Called every frame
 void UVoxelChunk::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -56,19 +124,17 @@ void UVoxelChunk::TickComponent(float DeltaTime, ELevelTick TickType, FActorComp
 void UVoxelChunk::UpdateMesh(const FVoxelData& VoxelMeshData)
 {
 	// 삼각형 데이터가 없으면 메시와 충돌을 초기화한 뒤 종료
-	if (VoxelMeshData.Triangles.Num() == 0)
+	if (VoxelMeshData.Vertices.Num() || VoxelMeshData.Triangles.Num() == 0)
 	{
 		GetDynamicMesh()->Reset();
-		SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		//SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		NotifyMeshUpdated();
 		return;
 	}
-
-	SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	
 	GetDynamicMesh()->EditMesh([&](FDynamicMesh3& EditMesh)
 	{
-		EditMesh.Clear(); // 필요 시 기존 데이터 초기화
+		EditMesh.Clear();
 		EditMesh.EnableVertexNormals(FVector3f());
 
 		Mappings.VertexToTriangles.SetNum(VoxelMeshData.Vertices.Num());
@@ -107,6 +173,7 @@ void UVoxelChunk::UpdateMesh(const FVoxelData& VoxelMeshData)
 		UE::Geometry::FMeshNormals::QuickComputeVertexNormals(EditMesh);
 	});
 	
+	//SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	NotifyMeshUpdated();
 }
 
