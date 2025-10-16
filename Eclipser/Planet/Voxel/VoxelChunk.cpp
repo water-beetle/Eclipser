@@ -124,7 +124,7 @@ void UVoxelChunk::TickComponent(float DeltaTime, ELevelTick TickType, FActorComp
 void UVoxelChunk::UpdateMesh(const FVoxelData& VoxelMeshData)
 {
 	// 삼각형 데이터가 없으면 메시와 충돌을 초기화한 뒤 종료
-	if (VoxelMeshData.Vertices.Num() || VoxelMeshData.Triangles.Num() == 0)
+	if (VoxelMeshData.Vertices.Num() == 0 || VoxelMeshData.Triangles.Num() == 0)
 	{
 		GetDynamicMesh()->Reset();
 		//SetCollisionEnabled(ECollisionEnabled::NoCollision);
