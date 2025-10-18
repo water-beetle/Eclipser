@@ -49,5 +49,11 @@ private:
 	double BuildStartTime = 0.0;
 	int32 TotalChunkCount = 0;
 	int32 CompletedChunkCount = 0;
+	
+	UPROPERTY(EditAnywhere, Category="Voxel|Performance", meta=(ClampMin="0", UIMin="0", AllowPrivateAccess=true))
+	int32 MaxChunksPerFrame = 20;
+	UPROPERTY(EditAnywhere, Category="Voxel|Performance", meta=(ClampMin="0.0", UIMin="0.0", AllowPrivateAccess=true))
+	float ChunkProcessingTimeBudgetMs = 2.0f;
+	
 	bool bLoggedBuildTime = false;
 };

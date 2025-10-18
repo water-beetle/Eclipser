@@ -22,8 +22,6 @@ void UVoxelManager::BeginPlay()
 	Super::BeginPlay();
 	check(GetOwner());
 
-	const double StartTime = FPlatformTime::Seconds();
-
 	// Voxel은 Actor의 Location을 중점으로 생성됨
 	for (int32 x = 0; x < ChunkNum; ++x)
 		for (int32 y = 0; y < ChunkNum; ++y)
@@ -43,11 +41,7 @@ void UVoxelManager::BeginPlay()
 
 				EnqueueGenerateChunk(Chunk, ChunkInfo);
 				++TotalChunkCount;
-			}
-
-	const double ElapsedMs = (FPlatformTime::Seconds() - StartTime) * 1000.0;
-	UE_LOG(LogTemp, Warning, TEXT("[VoxelManagerComponent] Build Time : %.2f ms"), ElapsedMs);
-	
+			}	
 }
 
 
@@ -148,6 +142,12 @@ void UVoxelManager::EnqueueGenerateChunk(UVoxelChunk* Chunk, const FChunkSetting
 void UVoxelManager::GenerateCompletedChunk()
 {
 	FPendingChunkResult PendingResult;
+	const double StartTime = FPlatformTime::Seconds();
+	int32 ProcessedCount = 0;
+	const double TimeBudgetSeconds = ChunkProcessingTimeBudgetMs > 0.0f
+											 ? static_cast<double>(ChunkProcessingTimeBudgetMs) / 1000.0
+											 : 0.0;
+	
 	while (CompletedChunkDataQueue.Dequeue(PendingResult))
 	{
 		if (PendingResult.Chunk.IsValid())
@@ -159,6 +159,15 @@ void UVoxelManager::GenerateCompletedChunk()
 		}
 
 		++CompletedChunkCount;
+		++ProcessedCount;
+
+
+		// 프레임 드랍 방지 -> MaxChunksPerFrame 만큼의 Chunk만 생성하고 다음 프레임에서 Chunk 생성
+		const bool bReachedCountLimit = MaxChunksPerFrame > 0 && ProcessedCount >= MaxChunksPerFrame;
+		const bool bReachedTimeLimit = TimeBudgetSeconds > 0.0 && (FPlatformTime::Seconds() - StartTime) >= TimeBudgetSeconds;
+		
+		if (bReachedCountLimit || bReachedTimeLimit)
+			break;
 	}
 
 	if (!bLoggedBuildTime && TotalChunkCount > 0 && CompletedChunkCount >= TotalChunkCount)
