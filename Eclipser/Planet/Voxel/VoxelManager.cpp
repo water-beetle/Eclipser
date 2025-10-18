@@ -37,10 +37,12 @@ void UVoxelManager::BeginPlay()
 				Chunk->AttachToComponent(this, FAttachmentTransformRules::KeepRelativeTransform);
 				Chunk->SetRelativeLocation(ChunkInfo.ChunkPos);
 				
-				Chunk->Build(ChunkInfo);
 				Chunk->SetVoxelManager(this);
 
 				RegisterChunk(FIntVector(x,y,z), Chunk);
+
+				EnqueueGenerateChunk(Chunk, ChunkInfo);
+				++TotalChunkCount;
 			}
 
 	const double ElapsedMs = (FPlatformTime::Seconds() - StartTime) * 1000.0;
@@ -54,7 +56,7 @@ void UVoxelManager::TickComponent(float DeltaTime, ELevelTick TickType, FActorCo
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	// ...
+	GenerateCompletedChunk();
 }
 
 void UVoxelManager::RegisterChunk(const FIntVector& Index, UVoxelChunk* Chunk)
@@ -120,5 +122,61 @@ void UVoxelManager::Sculpt(const FVector& ImpactPoint, float Radius)
 			}
 		}
 	}
+}
+
+void UVoxelManager::EnqueueGenerateChunk(UVoxelChunk* Chunk, const FChunkSettingInfo& ChunkInfo)
+{
+	if (!IsValid(Chunk)) return;
+
+	TWeakObjectPtr<UVoxelManager> ManagerPtr(this);
+	TWeakObjectPtr<UVoxelChunk> ChunkPtr(Chunk);
+
+	UE::Tasks::Launch(
+		UE_SOURCE_LOCATION, [ManagerPtr, ChunkPtr, ChunkInfo]()
+		{
+			FChunkBuildResult Result = UVoxelChunk::GenerateChunkData(ChunkInfo);
+
+		   if (UVoxelManager* Manager = ManagerPtr.Get())
+		   {
+			   Manager->PushCompletedResult(MoveTemp(Result), ChunkPtr, ChunkInfo);
+		   }
+		},
+	UE::Tasks::ETaskPriority::BackgroundHigh
+	);
+}
+
+void UVoxelManager::GenerateCompletedChunk()
+{
+	FPendingChunkResult PendingResult;
+	while (CompletedChunkDataQueue.Dequeue(PendingResult))
+	{
+		if (PendingResult.Chunk.IsValid())
+		{
+			if (UVoxelChunk* Chunk = PendingResult.Chunk.Get())
+			{
+				Chunk->GenerateChunkMesh(PendingResult.Info, MoveTemp(PendingResult.Result));
+			}
+		}
+
+		++CompletedChunkCount;
+	}
+
+	if (!bLoggedBuildTime && TotalChunkCount > 0 && CompletedChunkCount >= TotalChunkCount)
+	{
+		const double ElapsedMs = (FPlatformTime::Seconds() - BuildStartTime) * 1000.0;
+		UE_LOG(LogTemp, Warning, TEXT("[VoxelManagerComponent] Build Time : %.2f ms"), ElapsedMs);
+		bLoggedBuildTime = true;
+	}
+}
+
+void UVoxelManager::PushCompletedResult(FChunkBuildResult&& Result, const TWeakObjectPtr<UVoxelChunk>& Chunk,
+                                        const FChunkSettingInfo& ChunkInfo)
+{
+	FPendingChunkResult Pending;
+	Pending.Chunk = Chunk;
+	Pending.Info = ChunkInfo;
+	Pending.Result = MoveTemp(Result);
+
+	CompletedChunkDataQueue.Enqueue(Pending);
 }
 

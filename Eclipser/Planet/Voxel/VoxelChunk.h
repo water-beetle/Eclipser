@@ -29,7 +29,8 @@ public:
 	// Sets default values for this component's properties
 	UVoxelChunk();
 
-	void Build(const FChunkSettingInfo& Info);
+	void GenerateChunkMesh(const FChunkSettingInfo& Info, FChunkBuildResult&& Result);
+	static FChunkBuildResult GenerateChunkData(const FChunkSettingInfo& Info);
 	void SetVoxelManager(UVoxelManager* VoxelManager){ OwningManager = VoxelManager; }
 	UVoxelManager* GetVoxelManager() const {return OwningManager; }
 	void Sculpt(const FVector& ImpactPoint, float radius);;
@@ -50,8 +51,8 @@ private:
 	FChunkSettingInfo ChunkInfo;
 	
 	void UpdateMesh(const FVoxelData& VoxelMeshData);
-	void InitializeChunkDensityData(const FChunkSettingInfo& Info);
-	float CalculateDensity(const FVector& Pos, int Radius);
+	static void GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray<FVertexDensity>& OutDensityData);
+	static float CalculateDensity(const FVector& Pos, int Radius);
 
 	UPROPERTY()
 	UVoxelManager* OwningManager = nullptr;

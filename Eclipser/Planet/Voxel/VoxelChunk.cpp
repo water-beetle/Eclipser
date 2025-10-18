@@ -10,17 +10,24 @@
 UVoxelChunk::UVoxelChunk()
 {
 	PrimaryComponentTick.bCanEverTick = true;
-
 	
 }
 
-void UVoxelChunk::Build(const FChunkSettingInfo& Info)
+void UVoxelChunk::GenerateChunkMesh(const FChunkSettingInfo& Info, FChunkBuildResult&& Result)
 {
-	InitializeChunkDensityData(Info);
 	ChunkInfo = Info;
-	
-	CachedMeshData = MarchingCubeMeshGenerator::GenerateChunkMesh(Info, ChunkDensityData);
+	ChunkDensityData = MoveTemp(Result.DensityData);
+	CachedMeshData = MoveTemp(Result.MeshData);
 	UpdateMesh(CachedMeshData);
+}
+
+FChunkBuildResult UVoxelChunk::GenerateChunkData(const FChunkSettingInfo& Info)
+{
+	// 단순 계산이라 스레드 처리 가능
+	FChunkBuildResult Result;
+	GenerateChunkDensityData(Info, Result.DensityData);
+	Result.MeshData = MarchingCubeMeshGenerator::GenerateChunkMesh(Info, Result.DensityData);
+	return Result;
 }
 
 void UVoxelChunk::Sculpt(const FVector& ImpactPoint, float Radius)
@@ -177,9 +184,9 @@ void UVoxelChunk::UpdateMesh(const FVoxelData& VoxelMeshData)
 	NotifyMeshUpdated();
 }
 
-void UVoxelChunk::InitializeChunkDensityData(const FChunkSettingInfo& Info)
+void UVoxelChunk::GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray<FVertexDensity>& OutDensityData)
 {
-	ChunkDensityData.SetNum((Info.CellNum+1) * (Info.CellNum+1) * (Info.CellNum+1));
+	OutDensityData.SetNum((Info.CellNum+1) * (Info.CellNum+1) * (Info.CellNum+1));
 	
 	for (int z=0; z < Info.CellNum + 1; z += 1)
 	{
@@ -188,7 +195,7 @@ void UVoxelChunk::InitializeChunkDensityData(const FChunkSettingInfo& Info)
 			for (int x=0; x < Info.CellNum + 1; x += 1)
 			{
 				FVector Pos = FVector(x, y, z) * Info.CellSize - FVector(Info.ChunkSize) * 0.5f + Info.ChunkPos;
-				ChunkDensityData[VoxelHelper::GetIndex(x,y,z,Info.CellNum)].Density = CalculateDensity(Pos, Info.VoxelSize * 0.3f);
+				OutDensityData[VoxelHelper::GetIndex(x,y,z,Info.CellNum)].Density = CalculateDensity(Pos, Info.VoxelSize * 0.3f);
 			}
 		}
 	}

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
+#include "Defines/VoxelStructs.h"
 #include "VoxelManager.generated.h"
 
 class UVoxelChunk;
@@ -38,4 +39,15 @@ public:
 private:
 	UPROPERTY(VisibleAnywhere, meta=(AllowPrivateAccess = true))
 	TMap<FIntVector, UVoxelChunk*> ChunkMap;
+	
+	void EnqueueGenerateChunk(UVoxelChunk* Chunk, const FChunkSettingInfo& ChunkInfo);
+	void GenerateCompletedChunk();
+	void PushCompletedResult(FChunkBuildResult&& Result, const TWeakObjectPtr<UVoxelChunk>& Chunk, const FChunkSettingInfo& ChunkInfo);
+private:
+
+	TQueue<FPendingChunkResult, EQueueMode::Mpsc> CompletedChunkDataQueue;
+	double BuildStartTime = 0.0;
+	int32 TotalChunkCount = 0;
+	int32 CompletedChunkCount = 0;
+	bool bLoggedBuildTime = false;
 };

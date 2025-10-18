@@ -1,5 +1,7 @@
 #pragma once
 
+class UVoxelChunk;
+
 struct FChunkSettingInfo
 {/*
  * 용어 정의
@@ -59,4 +61,17 @@ struct FVoxelDataMappings
 	TMap<FIntVector, TSet<int32>> CellToTriangles;
 	TMap<FIntVector, TArray<int32>> CellToVertices;
 	bool bIsLoaded = false;
+};
+
+struct FChunkBuildResult
+{
+	FVoxelData MeshData;
+	TArray<FVertexDensity> DensityData;
+};
+
+struct FPendingChunkResult
+{
+	TWeakObjectPtr<UVoxelChunk> Chunk;
+	FChunkSettingInfo Info;
+	FChunkBuildResult Result;
 };
