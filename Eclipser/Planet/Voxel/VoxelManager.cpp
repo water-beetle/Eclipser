@@ -3,6 +3,7 @@
 #include "VoxelManager.h"
 #include "Planet/Voxel/VoxelChunk.h"
 #include "Defines/VoxelStructs.h"
+#include "Kismet/GameplayStatics.h"
 
 
 // Sets default values for this component's properties
@@ -22,6 +23,33 @@ void UVoxelManager::BeginPlay()
 	Super::BeginPlay();
 	check(GetOwner());
 
+	if (ChunkNum <= 0 || CellNum <= 0 || CellSize <= 0)
+	{
+		return;
+	}
+
+	struct FChunkGenerationRequest
+	{
+		UVoxelChunk* Chunk = nullptr;
+		FChunkSettingInfo Info;
+		float DistanceSquared = 0.0f;
+	};
+
+	TArray<FChunkGenerationRequest> GenerationRequests;
+	GenerationRequests.Reserve(ChunkNum * ChunkNum * ChunkNum);
+
+	const FVector ReferenceLocation = [&]()
+	{
+		if (UWorld* World = GetWorld())
+		{
+			if (APawn* Pawn = UGameplayStatics::GetPlayerPawn(World, 0))
+			{
+				return Pawn->GetActorLocation();
+			}
+		}
+		return GetComponentLocation();
+	}();
+	
 	// Voxel은 Actor의 Location을 중점으로 생성됨
 	for (int32 x = 0; x < ChunkNum; ++x)
 		for (int32 y = 0; y < ChunkNum; ++y)
@@ -39,9 +67,21 @@ void UVoxelManager::BeginPlay()
 
 				RegisterChunk(FIntVector(x,y,z), Chunk);
 
-				EnqueueGenerateChunk(Chunk, ChunkInfo);
-				++TotalChunkCount;
-			}	
+				FChunkGenerationRequest& Request = GenerationRequests.Emplace_GetRef();
+				Request.Chunk = Chunk;
+				Request.Info = ChunkInfo;
+				const FVector ChunkWorldLocation = GetComponentTransform().TransformPosition(ChunkInfo.ChunkPos);
+				Request.DistanceSquared = FVector::DistSquared(ReferenceLocation, ChunkWorldLocation);
+			}
+
+	GenerationRequests.Shrink();
+	Algo::SortBy(GenerationRequests, &FChunkGenerationRequest::DistanceSquared);
+
+	for (FChunkGenerationRequest& Request : GenerationRequests)
+	{
+		EnqueueGenerateChunk(Request.Chunk, Request.Info);
+		++TotalChunkCount;
+	}
 }
 
 
