@@ -32,8 +32,8 @@ FChunkBuildResult UVoxelChunk::GenerateChunkData(const FChunkSettingInfo& Info)
 
 void UVoxelChunk::Sculpt(const FVector& ImpactPoint, float Radius)
 {
-	if (ChunkInfo.CellNum <= 0 || ChunkInfo.CellSize <= 0)
-                return;
+	if (ChunkInfo.GetEffectiveCellNum() <= 0 || ChunkInfo.GetEffectiveCellSize() <= 0.0f)
+		return;
 
         const FVector ChunkCenter = GetComponentLocation();
         const FVector ChunkExtent = FVector(ChunkInfo.ChunkSize) * 0.5f;
@@ -50,56 +50,57 @@ void UVoxelChunk::Sculpt(const FVector& ImpactPoint, float Radius)
                 return;
         }
 
-        const float CellSize = static_cast<float>(ChunkInfo.CellSize);
+	const float CellSize = ChunkInfo.GetEffectiveCellSize();
+	const int32 EffectiveCellNum = ChunkInfo.GetEffectiveCellNum();
 
-        auto ToMinIndex = [&](float Value, float MinBound) -> int32
-        {
-                const float Normalized = (Value - MinBound) / CellSize;
-                return FMath::Clamp(FMath::FloorToInt(Normalized), 0, ChunkInfo.CellNum);
-        };
+    auto ToMinIndex = [&](float Value, float MinBound) -> int32
+    {
+            const float Normalized = (Value - MinBound) / CellSize;
+            return FMath::Clamp(FMath::FloorToInt(Normalized), 0, EffectiveCellNum);
+    };
 
-        auto ToMaxIndex = [&](float Value, float MinBound) -> int32
-        {
-                const float Normalized = (Value - MinBound) / CellSize;
-                return FMath::Clamp(FMath::CeilToInt(Normalized), 0, ChunkInfo.CellNum);
-        };
+    auto ToMaxIndex = [&](float Value, float MinBound) -> int32
+    {
+            const float Normalized = (Value - MinBound) / CellSize;
+            return FMath::Clamp(FMath::CeilToInt(Normalized), 0, EffectiveCellNum);
+    };
 
-        const int32 StartX = ToMinIndex(FMath::Max(SphereMin.X, ChunkMin.X), ChunkMin.X);
-        const int32 StartY = ToMinIndex(FMath::Max(SphereMin.Y, ChunkMin.Y), ChunkMin.Y);
-        const int32 StartZ = ToMinIndex(FMath::Max(SphereMin.Z, ChunkMin.Z), ChunkMin.Z);
+    const int32 StartX = ToMinIndex(FMath::Max(SphereMin.X, ChunkMin.X), ChunkMin.X);
+    const int32 StartY = ToMinIndex(FMath::Max(SphereMin.Y, ChunkMin.Y), ChunkMin.Y);
+    const int32 StartZ = ToMinIndex(FMath::Max(SphereMin.Z, ChunkMin.Z), ChunkMin.Z);
 
-        const int32 EndX = ToMaxIndex(FMath::Min(SphereMax.X, ChunkMax.X), ChunkMin.X);
-        const int32 EndY = ToMaxIndex(FMath::Min(SphereMax.Y, ChunkMax.Y), ChunkMin.Y);
-        const int32 EndZ = ToMaxIndex(FMath::Min(SphereMax.Z, ChunkMax.Z), ChunkMin.Z);
+    const int32 EndX = ToMaxIndex(FMath::Min(SphereMax.X, ChunkMax.X), ChunkMin.X);
+    const int32 EndY = ToMaxIndex(FMath::Min(SphereMax.Y, ChunkMax.Y), ChunkMin.Y);
+    const int32 EndZ = ToMaxIndex(FMath::Min(SphereMax.Z, ChunkMax.Z), ChunkMin.Z);
 
-        if (StartX > EndX || StartY > EndY || StartZ > EndZ)
-                return;
+    if (StartX > EndX || StartY > EndY || StartZ > EndZ)
+            return;
 
-        const FVector SphereCenter(ImpactPoint);
-        const float RadiusSquared = Radius * Radius;
+    const FVector SphereCenter(ImpactPoint);
+    const float RadiusSquared = Radius * Radius;
 
-        for (int32 z = StartZ; z <= EndZ; ++z)
-        {
-                for (int32 y = StartY; y <= EndY; ++y)
-                {
-                        for (int32 x = StartX; x <= EndX; ++x)
-                        {
-                                const int32 VertexIndex = VoxelHelper::GetIndex(x, y, z, ChunkInfo.CellNum);
-                                FVector VertexPosition = ChunkMin + FVector(x, y, z) * CellSize;
+    for (int32 z = StartZ; z <= EndZ; ++z)
+    {
+            for (int32 y = StartY; y <= EndY; ++y)
+            {
+                    for (int32 x = StartX; x <= EndX; ++x)
+                    {
+                            const int32 VertexIndex = VoxelHelper::GetIndex(x, y, z, EffectiveCellNum);
+                            FVector VertexPosition = ChunkMin + FVector(x, y, z) * CellSize;
 
-                                const float DistanceSquared = FVector::DistSquared(VertexPosition, SphereCenter);
-                                if (DistanceSquared > RadiusSquared)
-                                        continue;
+                            const float DistanceSquared = FVector::DistSquared(VertexPosition, SphereCenter);
+                            if (DistanceSquared > RadiusSquared)
+                                    continue;
 
-                                const float Distance = FMath::Sqrt(DistanceSquared);
-                                const float TargetDensity = Distance - Radius;
-                                ChunkDensityData[VertexIndex].Density = FMath::Min(ChunkDensityData[VertexIndex].Density, TargetDensity);
-                        }
-                }
-        }
+                            const float Distance = FMath::Sqrt(DistanceSquared);
+                            const float TargetDensity = Distance - Radius;
+                            ChunkDensityData[VertexIndex].Density = FMath::Min(ChunkDensityData[VertexIndex].Density, TargetDensity);
+                    }
+            }
+    }
 
-        CachedMeshData = MarchingCubeMeshGenerator::GenerateChunkMesh(ChunkInfo, ChunkDensityData);
-        UpdateMesh(CachedMeshData);
+    CachedMeshData = MarchingCubeMeshGenerator::GenerateChunkMesh(ChunkInfo, ChunkDensityData);
+    UpdateMesh(CachedMeshData);
 }
 
 // Called when the game starts
@@ -186,16 +187,20 @@ void UVoxelChunk::UpdateMesh(const FVoxelData& VoxelMeshData)
 
 void UVoxelChunk::GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray<FVertexDensity>& OutDensityData)
 {
-	OutDensityData.SetNum((Info.CellNum+1) * (Info.CellNum+1) * (Info.CellNum+1));
+	const int32 EffectiveCellNum = Info.GetEffectiveCellNum();
+	const float EffectiveCellSize = Info.GetEffectiveCellSize();
+	const float ChunkSize = static_cast<float>(Info.ChunkSize);
 	
-	for (int z=0; z < Info.CellNum + 1; z += 1)
+	OutDensityData.SetNum((EffectiveCellNum +1) * (EffectiveCellNum +1) * (EffectiveCellNum +1));
+	
+	for (int z=0; z < EffectiveCellNum  + 1; z += 1)
 	{
-		for (int y=0; y < Info.CellNum + 1; y += 1)
+		for (int y=0; y < EffectiveCellNum  + 1; y += 1)
 		{
-			for (int x=0; x < Info.CellNum + 1; x += 1)
+			for (int x=0; x < EffectiveCellNum  + 1; x += 1)
 			{
-				FVector Pos = FVector(x, y, z) * Info.CellSize - FVector(Info.ChunkSize) * 0.5f + Info.ChunkPos;
-				OutDensityData[VoxelHelper::GetIndex(x,y,z,Info.CellNum)].Density = CalculateDensity(Pos, Info.VoxelSize * 0.3f);
+				FVector Pos = FVector(x, y, z) * EffectiveCellSize - FVector(ChunkSize) * 0.5f + Info.ChunkPos;
+				OutDensityData[VoxelHelper::GetIndex(x,y,z,EffectiveCellNum)].Density = CalculateDensity(Pos, Info.VoxelSize * 0.3f);
 			}
 		}
 	}

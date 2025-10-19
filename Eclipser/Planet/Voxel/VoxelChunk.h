@@ -33,6 +33,7 @@ public:
 	static FChunkBuildResult GenerateChunkData(const FChunkSettingInfo& Info);
 	void SetVoxelManager(UVoxelManager* VoxelManager){ OwningManager = VoxelManager; }
 	UVoxelManager* GetVoxelManager() const {return OwningManager; }
+	const FChunkSettingInfo& GetChunkInfo() const { return ChunkInfo; }
 	void Sculpt(const FVector& ImpactPoint, float radius);;
 
 protected:

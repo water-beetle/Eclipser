@@ -35,6 +35,9 @@ public:
 	UPROPERTY(EditAnywhere, Category="Voxel")
 	int ChunkNum;
 
+	UPROPERTY(EditAnywhere, Category="Voxel|LOD")
+	TArray<FChunkLODConfig> LODSettings;
+
 	void Sculpt(const FVector& ImpactPoint, float Radius);
 private:
 	UPROPERTY(VisibleAnywhere, meta=(AllowPrivateAccess = true))
@@ -43,6 +46,11 @@ private:
 	void EnqueueGenerateChunk(UVoxelChunk* Chunk, const FChunkSettingInfo& ChunkInfo);
 	void GenerateCompletedChunk();
 	void PushCompletedResult(FChunkBuildResult&& Result, const TWeakObjectPtr<UVoxelChunk>& Chunk, const FChunkSettingInfo& ChunkInfo);
+	void SetLOD();
+	int32 DetermineLODLevel(float Distance) const;
+	int32 DetermineEffectiveCellNum(int32 LODLevel) const;
+	void UpdateChunkLODs();
+	FVector GetReferenceLocation() const;
 private:
 
 	TQueue<FPendingChunkResult, EQueueMode::Mpsc> CompletedChunkDataQueue;
@@ -56,4 +64,6 @@ private:
 	float ChunkProcessingTimeBudgetMs = 2.0f;
 	
 	bool bLoggedBuildTime = false;
+	TArray<FChunkLODConfig> SortedLODSettings;
+	TMap<FIntVector, FChunkSettingInfo> PendingChunkInfos;
 };

@@ -17,6 +17,143 @@ UVoxelManager::UVoxelManager()
 }
 
 
+void UVoxelManager::SetLOD()
+{
+	// LOD 거리 순으로 정렬
+	SortedLODSettings = LODSettings;
+	SortedLODSettings.Sort([](const FChunkLODConfig& A, const FChunkLODConfig& B)
+	{
+		return A.Distance < B.Distance;
+	});
+
+	// Distance가 0인 항목이 반드시 추가 되어 있어야 함
+	const bool bHasBaseLOD = SortedLODSettings.ContainsByPredicate([](const FChunkLODConfig& Config)
+	{
+		return Config.Distance <= KINDA_SMALL_NUMBER;
+	});
+
+	if (!bHasBaseLOD)
+	{
+		FChunkLODConfig BaseConfig;
+		BaseConfig.Distance = 0.0f;
+		BaseConfig.CellNum = CellNum;
+		SortedLODSettings.Insert(BaseConfig, 0);
+	}
+
+	if (SortedLODSettings.Num() > 0)
+	{
+		SortedLODSettings[0].Distance = 0.0f;
+		if (SortedLODSettings[0].CellNum <= 0)
+		{
+			SortedLODSettings[0].CellNum = CellNum;
+		}
+		SortedLODSettings[0].CellNum = FMath::Clamp(SortedLODSettings[0].CellNum, 1, CellNum);
+	}
+	
+	for (int32 Index = 1; Index < SortedLODSettings.Num(); ++Index)
+	{
+		FChunkLODConfig& Config = SortedLODSettings[Index];
+		const FChunkLODConfig& PrevConfig = SortedLODSettings[Index - 1];
+
+		Config.Distance = FMath::Max(Config.Distance, PrevConfig.Distance);
+		if (Config.CellNum <= 0)
+		{
+			Config.CellNum = FMath::Max(1, PrevConfig.CellNum / 2);
+		}
+		Config.CellNum = FMath::Clamp(Config.CellNum, 1, CellNum);
+	}
+}
+
+int32 UVoxelManager::DetermineLODLevel(float Distance) const
+{
+	if (SortedLODSettings.Num() == 0)
+	{
+		return 0;
+	}
+
+	int32 SelectedIndex = 0;
+	for (int32 Index = 0; Index < SortedLODSettings.Num(); ++Index)
+	{
+		if (Distance >= SortedLODSettings[Index].Distance)
+		{
+			SelectedIndex = Index;
+		}
+		else
+		{
+			break;
+		}
+	}
+
+	return SelectedIndex;
+}
+
+int32 UVoxelManager::DetermineEffectiveCellNum(int32 LODLevel) const
+{
+	if (SortedLODSettings.Num() == 0)
+	{
+		return CellNum;
+	}
+
+	const int32 Index = FMath::Clamp(LODLevel, 0, SortedLODSettings.Num() - 1);
+	const int32 ConfigCellNum = SortedLODSettings[Index].CellNum;
+	return FMath::Clamp(ConfigCellNum > 0 ? ConfigCellNum : CellNum, 1, CellNum);
+}
+
+void UVoxelManager::UpdateChunkLODs()
+{
+	if (ChunkMap.Num() == 0)
+	{
+		return;
+	}
+
+	const FVector ReferenceLocation = GetReferenceLocation();
+
+	for (const TPair<FIntVector, UVoxelChunk*>& Pair : ChunkMap)
+	{
+		UVoxelChunk* Chunk = Pair.Value;
+		if (!IsValid(Chunk))
+		{
+			continue;
+		}
+
+		const float Distance = FVector::Dist(ReferenceLocation, Chunk->GetComponentLocation());
+		const int32 DesiredLOD = DetermineLODLevel(Distance);
+
+		const FChunkSettingInfo* PendingInfo = PendingChunkInfos.Find(Pair.Key);
+		const int32 CurrentLOD = PendingInfo ? PendingInfo->LODLevel : Chunk->GetChunkInfo().LODLevel;
+
+		if (DesiredLOD == CurrentLOD)
+		{
+			continue;
+		}
+
+		if (PendingInfo != nullptr)
+		{
+			continue;
+		}
+
+		FChunkSettingInfo NewInfo = Chunk->GetChunkInfo();
+		NewInfo.LODLevel = DesiredLOD;
+		NewInfo.EffectiveCellNum = DetermineEffectiveCellNum(DesiredLOD);
+		NewInfo.Calculate();
+
+		EnqueueGenerateChunk(Chunk, NewInfo);
+	}
+}
+
+FVector UVoxelManager::GetReferenceLocation() const
+{
+	if (UWorld* World = GetWorld())
+	{
+		if (APawn* Pawn = UGameplayStatics::GetPlayerPawn(World, 0))
+		{
+			return Pawn->GetActorLocation();
+		}
+	}
+
+	return GetComponentLocation();
+}
+
 // Called when the game starts
 void UVoxelManager::BeginPlay()
 {
@@ -28,27 +165,12 @@ void UVoxelManager::BeginPlay()
 		return;
 	}
 
-	struct FChunkGenerationRequest
-	{
-		UVoxelChunk* Chunk = nullptr;
-		FChunkSettingInfo Info;
-		float DistanceSquared = 0.0f;
-	};
+	SetLOD();
 
 	TArray<FChunkGenerationRequest> GenerationRequests;
 	GenerationRequests.Reserve(ChunkNum * ChunkNum * ChunkNum);
 
-	const FVector ReferenceLocation = [&]()
-	{
-		if (UWorld* World = GetWorld())
-		{
-			if (APawn* Pawn = UGameplayStatics::GetPlayerPawn(World, 0))
-			{
-				return Pawn->GetActorLocation();
-			}
-		}
-		return GetComponentLocation();
-	}();
+	const FVector ReferenceLocation = GetReferenceLocation();
 	
 	// Voxel은 Actor의 Location을 중점으로 생성됨
 	for (int32 x = 0; x < ChunkNum; ++x)
@@ -56,6 +178,15 @@ void UVoxelManager::BeginPlay()
 			for (int32 z = 0; z < ChunkNum; ++z)
 			{
 				FChunkSettingInfo ChunkInfo{ FIntVector(x,y,z), CellSize, CellNum, ChunkNum};
+				ChunkInfo.Calculate();
+
+				const FVector ChunkWorldLocation = GetComponentTransform().TransformPosition(ChunkInfo.ChunkPos);
+				const float DistanceSquared = FVector::DistSquared(ReferenceLocation, ChunkWorldLocation);
+				const float Distance = FMath::Sqrt(DistanceSquared);
+
+				const int32 LODLevel = DetermineLODLevel(Distance);
+				ChunkInfo.LODLevel = LODLevel;
+				ChunkInfo.EffectiveCellNum = DetermineEffectiveCellNum(LODLevel);
 				ChunkInfo.Calculate();
 				
 				UVoxelChunk* Chunk = NewObject<UVoxelChunk>(GetOwner());
@@ -70,8 +201,7 @@ void UVoxelManager::BeginPlay()
 				FChunkGenerationRequest& Request = GenerationRequests.Emplace_GetRef();
 				Request.Chunk = Chunk;
 				Request.Info = ChunkInfo;
-				const FVector ChunkWorldLocation = GetComponentTransform().TransformPosition(ChunkInfo.ChunkPos);
-				Request.DistanceSquared = FVector::DistSquared(ReferenceLocation, ChunkWorldLocation);
+				Request.DistanceSquared = DistanceSquared;
 			}
 
 	GenerationRequests.Shrink();
@@ -91,6 +221,7 @@ void UVoxelManager::TickComponent(float DeltaTime, ELevelTick TickType, FActorCo
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
 	GenerateCompletedChunk();
+	UpdateChunkLODs();
 }
 
 void UVoxelManager::RegisterChunk(const FIntVector& Index, UVoxelChunk* Chunk)
@@ -162,6 +293,9 @@ void UVoxelManager::EnqueueGenerateChunk(UVoxelChunk* Chunk, const FChunkSetting
 {
 	if (!IsValid(Chunk)) return;
 
+	FChunkSettingInfo& PendingInfo = PendingChunkInfos.FindOrAdd(ChunkInfo.ChunkIndex);
+	PendingInfo = ChunkInfo;
+	
 	TWeakObjectPtr<UVoxelManager> ManagerPtr(this);
 	TWeakObjectPtr<UVoxelChunk> ChunkPtr(Chunk);
 
@@ -197,6 +331,8 @@ void UVoxelManager::GenerateCompletedChunk()
 				Chunk->GenerateChunkMesh(PendingResult.Info, MoveTemp(PendingResult.Result));
 			}
 		}
+
+		PendingChunkInfos.Remove(PendingResult.Info.ChunkIndex);
 
 		++CompletedChunkCount;
 		++ProcessedCount;
