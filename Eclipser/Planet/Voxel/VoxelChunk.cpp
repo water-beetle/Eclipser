@@ -147,7 +147,6 @@ void UVoxelChunk::OnRegister()
 	Super::OnRegister();
 
 	SetCollisionProfileName(TEXT("Dig"));
-	UE_LOG(LogTemp, Warning, TEXT("Profile=%s"), *GetCollisionProfileName().ToString());
 	SetComplexAsSimpleCollisionEnabled(true, true);
 	bUseAsyncCooking = true;
 	SetMobility(EComponentMobility::Movable);
