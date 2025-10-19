@@ -30,10 +30,20 @@ public:
 	UVoxelChunk();
 
 	void GenerateChunkMesh(const FChunkSettingInfo& Info, FChunkBuildResult&& Result);
-	static FChunkBuildResult GenerateChunkData(const FChunkSettingInfo& Info);
+	static FChunkBuildResult GenerateChunkData(const FChunkSettingInfo& Info, UVoxelManager* Manager);
+
+	void InitializeChunk(const FChunkSettingInfo& Info);
+	
 	void SetVoxelManager(UVoxelManager* VoxelManager){ OwningManager = VoxelManager; }
 	UVoxelManager* GetVoxelManager() const {return OwningManager; }
+	int GetRequestedLODLevel() const {return RequestedLODLevel; };
+	int32 GetCurrentLODLevel() const { return CurrentLODLevel; }
+
+	FChunkSettingInfo MakeChunkSettingInfoForLOD(int32 LODLevel) const;
+	void SetRequestedLODLevel(int InLODLevel);
+	
 	void Sculpt(const FVector& ImpactPoint, float radius);;
+	
 
 protected:
 	// Called when the game starts
@@ -47,11 +57,13 @@ public:
 private:
 	FVoxelData CachedMeshData;
 	TArray<FVertexDensity> ChunkDensityData;
-	FVoxelDataMappings Mappings;
+	//FVoxelDataMappings Mappings;
 	FChunkSettingInfo ChunkInfo;
+	int32 CurrentLODLevel = 1;
+	int32 RequestedLODLevel = 1;
 	
 	void UpdateMesh(const FVoxelData& VoxelMeshData);
-	static void GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray<FVertexDensity>& OutDensityData);
+	static void GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray<FVertexDensity>& OutDensityData, UVoxelManager* Manager);
 	static float CalculateDensity(const FVector& Pos, int Radius);
 
 	UPROPERTY()

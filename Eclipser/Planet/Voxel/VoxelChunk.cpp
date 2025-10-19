@@ -18,16 +18,41 @@ void UVoxelChunk::GenerateChunkMesh(const FChunkSettingInfo& Info, FChunkBuildRe
 	ChunkInfo = Info;
 	ChunkDensityData = MoveTemp(Result.DensityData);
 	CachedMeshData = MoveTemp(Result.MeshData);
+	CurrentLODLevel = Info.LODLevel;
+	RequestedLODLevel = Info.LODLevel;
 	UpdateMesh(CachedMeshData);
 }
 
-FChunkBuildResult UVoxelChunk::GenerateChunkData(const FChunkSettingInfo& Info)
+FChunkBuildResult UVoxelChunk::GenerateChunkData(const FChunkSettingInfo& Info, UVoxelManager* Manager)
 {
 	// 단순 계산이라 스레드 처리 가능
 	FChunkBuildResult Result;
-	GenerateChunkDensityData(Info, Result.DensityData);
+	GenerateChunkDensityData(Info, Result.DensityData, Manager);
 	Result.MeshData = MarchingCubeMeshGenerator::GenerateChunkMesh(Info, Result.DensityData);
 	return Result;
+}
+
+void UVoxelChunk::InitializeChunk(const FChunkSettingInfo& Info)
+{
+	ChunkInfo = Info;
+	ChunkInfo.LODLevel = FMath::Max(1, ChunkInfo.LODLevel);
+	ChunkInfo.Calculate();
+
+	CurrentLODLevel = ChunkInfo.LODLevel;
+	RequestedLODLevel = ChunkInfo.LODLevel;
+}
+
+FChunkSettingInfo UVoxelChunk::MakeChunkSettingInfoForLOD(int32 LODLevel) const
+{
+	FChunkSettingInfo Info = ChunkInfo;
+	Info.LODLevel = FMath::Max(1, LODLevel);
+	Info.Calculate();
+	return Info;
+}
+
+void UVoxelChunk::SetRequestedLODLevel(int InLODLevel)
+{
+	RequestedLODLevel = FMath::Max(1, InLODLevel);
 }
 
 void UVoxelChunk::Sculpt(const FVector& ImpactPoint, float Radius)
@@ -93,7 +118,16 @@ void UVoxelChunk::Sculpt(const FVector& ImpactPoint, float Radius)
 
                                 const float Distance = FMath::Sqrt(DistanceSquared);
                                 const float TargetDensity = Distance - Radius;
-                                ChunkDensityData[VertexIndex].Density = FMath::Min(ChunkDensityData[VertexIndex].Density, TargetDensity);
+                        		float& CurrentDensity = ChunkDensityData[VertexIndex].Density;
+                        		const float NewDensity = FMath::Min(CurrentDensity, TargetDensity);
+                        		if (!FMath::IsNearlyEqual(CurrentDensity, NewDensity))
+                        		{
+                        			CurrentDensity = NewDensity;
+                        			if (OwningManager)
+                        			{
+                        				OwningManager->RecordSculptedDensity(ChunkInfo, x, y, z, CurrentDensity);
+                        			}
+                        		}
                         }
                 }
         }
@@ -144,7 +178,7 @@ void UVoxelChunk::UpdateMesh(const FVoxelData& VoxelMeshData)
 		EditMesh.Clear();
 		EditMesh.EnableVertexNormals(FVector3f());
 
-		Mappings.VertexToTriangles.SetNum(VoxelMeshData.Vertices.Num());
+		//Mappings.VertexToTriangles.SetNum(VoxelMeshData.Vertices.Num());
 		
 		TArray<int32> VIDs;
 		VIDs.Reserve(VoxelMeshData.Vertices.Num());
@@ -184,7 +218,7 @@ void UVoxelChunk::UpdateMesh(const FVoxelData& VoxelMeshData)
 	NotifyMeshUpdated();
 }
 
-void UVoxelChunk::GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray<FVertexDensity>& OutDensityData)
+void UVoxelChunk::GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray<FVertexDensity>& OutDensityData, UVoxelManager* Manager)
 {
 	OutDensityData.SetNum((Info.CellNum+1) * (Info.CellNum+1) * (Info.CellNum+1));
 	
@@ -198,6 +232,11 @@ void UVoxelChunk::GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray
 				OutDensityData[VoxelHelper::GetIndex(x,y,z,Info.CellNum)].Density = CalculateDensity(Pos, Info.VoxelSize * 0.3f);
 			}
 		}
+	}
+
+	if (Manager)
+	{
+		Manager->ApplySculptedDensityOverrides(Info, OutDensityData);
 	}
 }
 

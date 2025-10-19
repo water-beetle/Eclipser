@@ -36,13 +36,19 @@ public:
 	int ChunkNum;
 
 	void Sculpt(const FVector& ImpactPoint, float Radius);
+	void RecordSculptedDensity(const FChunkSettingInfo& Info, int32 LocalX, int32 LocalY, int32 LocalZ, float Density);
+	void ApplySculptedDensityOverrides(const FChunkSettingInfo& Info, TArray<FVertexDensity>& DensityData);
+	
 private:
 	UPROPERTY(VisibleAnywhere, meta=(AllowPrivateAccess = true))
 	TMap<FIntVector, UVoxelChunk*> ChunkMap;
 	
+	void GenerateChunk();
 	void EnqueueGenerateChunk(UVoxelChunk* Chunk, const FChunkSettingInfo& ChunkInfo);
 	void GenerateCompletedChunk();
 	void PushCompletedResult(FChunkBuildResult&& Result, const TWeakObjectPtr<UVoxelChunk>& Chunk, const FChunkSettingInfo& ChunkInfo);
+
+	FVector GetReferenceLocation() const;
 private:
 
 	TQueue<FPendingChunkResult, EQueueMode::Mpsc> CompletedChunkDataQueue;
@@ -56,4 +62,25 @@ private:
 	float ChunkProcessingTimeBudgetMs = 2.0f;
 	
 	bool bLoggedBuildTime = false;
+
+private:
+	/* LOD Settings */
+	int32 ComputeLODLevel(float Distance) const;
+	void UpdateChunkLODLevels(const FVector& Vector);
+
+	float TimeSinceLastLODUpdate = 0.0f;
+	
+	UPROPERTY(EditAnywhere, Category="Voxel|LOD", meta=(AllowPrivateAccess=true))
+	TArray<FLODDistanceLevel> LODDistanceLevels;
+	UPROPERTY(EditAnywhere, Category="Voxel|LOD", meta=(ClampMin="0.0", UIMin="0.0", AllowPrivateAccess=true))
+	float LODUpdateInterval = 0.2f;
+
+private:
+	/* Sculpt Settings*/
+	mutable FCriticalSection SculptedDensityLock;
+	struct FChunkSculptOverrides
+	{
+		TMap<int32, FFloat16> VertexDensities;
+	};
+	TMap<FIntVector, FChunkSculptOverrides> SculptedDensityMap;
 };

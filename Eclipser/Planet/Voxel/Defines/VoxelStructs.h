@@ -1,6 +1,21 @@
 #pragma once
 
+#include "CoreMinimal.h"
+#include "VoxelStructs.generated.h"
+
 class UVoxelChunk;
+
+USTRUCT(BlueprintType)
+struct FLODDistanceLevel
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, Category="Voxel|LOD", meta=(ClampMin="1", UIMin="1"))
+	int32 LODLevel = 1;
+
+	UPROPERTY(EditAnywhere, Category="Voxel|LOD", meta=(ClampMin="0.0", UIMin="0.0"))
+	float DistanceThreshold = 0.0f;
+};
 
 struct FChunkSettingInfo
 {/*
@@ -76,4 +91,11 @@ struct FPendingChunkResult
 	TWeakObjectPtr<UVoxelChunk> Chunk;
 	FChunkSettingInfo Info;
 	FChunkBuildResult Result;
+};
+
+struct FChunkGenerationRequest
+{
+	UVoxelChunk* Chunk = nullptr;
+	FChunkSettingInfo Info;
+	float DistanceSquared = 0.0f;
 };
