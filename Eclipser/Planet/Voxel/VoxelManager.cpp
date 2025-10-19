@@ -177,7 +177,7 @@ void UVoxelManager::BeginPlay()
 		for (int32 y = 0; y < ChunkNum; ++y)
 			for (int32 z = 0; z < ChunkNum; ++z)
 			{
-				FChunkSettingInfo ChunkInfo{ FIntVector(x,y,z), CellSize, CellNum, ChunkNum};
+				FChunkSettingInfo ChunkInfo{ FIntVector(x,y,z), CellSize, CellNum, ChunkNum, 1};
 				ChunkInfo.Calculate();
 
 				const FVector ChunkWorldLocation = GetComponentTransform().TransformPosition(ChunkInfo.ChunkPos);

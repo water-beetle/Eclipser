@@ -39,6 +39,8 @@ struct FChunkSettingInfo
 	int CellSize;
 	int CellNum;
 	int ChunkNum;
+	int LODLevel = 1;
+
 	
 	int ChunkSize;
 	int VoxelSize;
