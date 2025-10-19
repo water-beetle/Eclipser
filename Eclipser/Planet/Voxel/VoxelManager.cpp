@@ -3,6 +3,7 @@
 #include "VoxelManager.h"
 #include "Planet/Voxel/VoxelChunk.h"
 #include "Defines/VoxelStructs.h"
+#include "etc/VoxelHelper.h"
 #include "Kismet/GameplayStatics.h"
 
 
@@ -17,160 +18,16 @@ UVoxelManager::UVoxelManager()
 }
 
 
-void UVoxelManager::SetLOD()
+void UVoxelManager::GenerateChunk()
 {
-	// LOD 거리 순으로 정렬
-	SortedLODSettings = LODSettings;
-	SortedLODSettings.Sort([](const FChunkLODConfig& A, const FChunkLODConfig& B)
-	{
-		return A.Distance < B.Distance;
-	});
-
-	// Distance가 0인 항목이 반드시 추가 되어 있어야 함
-	const bool bHasBaseLOD = SortedLODSettings.ContainsByPredicate([](const FChunkLODConfig& Config)
-	{
-		return Config.Distance <= KINDA_SMALL_NUMBER;
-	});
-
-	if (!bHasBaseLOD)
-	{
-		FChunkLODConfig BaseConfig;
-		BaseConfig.Distance = 0.0f;
-		BaseConfig.CellNum = CellNum;
-		SortedLODSettings.Insert(BaseConfig, 0);
-	}
-
-	if (SortedLODSettings.Num() > 0)
-	{
-		SortedLODSettings[0].Distance = 0.0f;
-		if (SortedLODSettings[0].CellNum <= 0)
-		{
-			SortedLODSettings[0].CellNum = CellNum;
-		}
-		SortedLODSettings[0].CellNum = FMath::Clamp(SortedLODSettings[0].CellNum, 1, CellNum);
-	}
-	
-	for (int32 Index = 1; Index < SortedLODSettings.Num(); ++Index)
-	{
-		FChunkLODConfig& Config = SortedLODSettings[Index];
-		const FChunkLODConfig& PrevConfig = SortedLODSettings[Index - 1];
-
-		Config.Distance = FMath::Max(Config.Distance, PrevConfig.Distance);
-		if (Config.CellNum <= 0)
-		{
-			Config.CellNum = FMath::Max(1, PrevConfig.CellNum / 2);
-		}
-		Config.CellNum = FMath::Clamp(Config.CellNum, 1, CellNum);
-	}
-}
-
-int32 UVoxelManager::DetermineLODLevel(float Distance) const
-{
-	if (SortedLODSettings.Num() == 0)
-	{
-		return 0;
-	}
-
-	int32 SelectedIndex = 0;
-	for (int32 Index = 0; Index < SortedLODSettings.Num(); ++Index)
-	{
-		if (Distance >= SortedLODSettings[Index].Distance)
-		{
-			SelectedIndex = Index;
-		}
-		else
-		{
-			break;
-		}
-	}
-
-	return SelectedIndex;
-}
-
-int32 UVoxelManager::DetermineEffectiveCellNum(int32 LODLevel) const
-{
-	if (SortedLODSettings.Num() == 0)
-	{
-		return CellNum;
-	}
-
-	const int32 Index = FMath::Clamp(LODLevel, 0, SortedLODSettings.Num() - 1);
-	const int32 ConfigCellNum = SortedLODSettings[Index].CellNum;
-	return FMath::Clamp(ConfigCellNum > 0 ? ConfigCellNum : CellNum, 1, CellNum);
-}
-
-void UVoxelManager::UpdateChunkLODs()
-{
-	if (ChunkMap.Num() == 0)
-	{
-		return;
-	}
-
-	const FVector ReferenceLocation = GetReferenceLocation();
-
-	for (const TPair<FIntVector, UVoxelChunk*>& Pair : ChunkMap)
-	{
-		UVoxelChunk* Chunk = Pair.Value;
-		if (!IsValid(Chunk))
-		{
-			continue;
-		}
-
-		const float Distance = FVector::Dist(ReferenceLocation, Chunk->GetComponentLocation());
-		const int32 DesiredLOD = DetermineLODLevel(Distance);
-
-		const FChunkSettingInfo* PendingInfo = PendingChunkInfos.Find(Pair.Key);
-		const int32 CurrentLOD = PendingInfo ? PendingInfo->LODLevel : Chunk->GetChunkInfo().LODLevel;
-
-		if (DesiredLOD == CurrentLOD)
-		{
-			continue;
-		}
-
-		if (PendingInfo != nullptr)
-		{
-			continue;
-		}
-
-		FChunkSettingInfo NewInfo = Chunk->GetChunkInfo();
-		NewInfo.LODLevel = DesiredLOD;
-		NewInfo.EffectiveCellNum = DetermineEffectiveCellNum(DesiredLOD);
-		NewInfo.Calculate();
-
-		EnqueueGenerateChunk(Chunk, NewInfo);
-	}
-}
-
-FVector UVoxelManager::GetReferenceLocation() const
-{
-	if (UWorld* World = GetWorld())
-	{
-		if (APawn* Pawn = UGameplayStatics::GetPlayerPawn(World, 0))
-		{
-			return Pawn->GetActorLocation();
-		}
-	}
-
-	return GetComponentLocation();
-}
-
-// Called when the game starts
-void UVoxelManager::BeginPlay()
-{
-	Super::BeginPlay();
 	check(GetOwner());
 
-	if (ChunkNum <= 0 || CellNum <= 0 || CellSize <= 0)
-	{
-		return;
-	}
+	if (ChunkNum <= 0 || CellNum <= 0 || CellSize <= 0) return;
 
-	SetLOD();
+	Algo::SortBy(LODDistanceLevels, &FLODDistanceLevel::DistanceThreshold);
 
 	TArray<FChunkGenerationRequest> GenerationRequests;
 	GenerationRequests.Reserve(ChunkNum * ChunkNum * ChunkNum);
-
-	const FVector ReferenceLocation = GetReferenceLocation();
 	
 	// Voxel은 Actor의 Location을 중점으로 생성됨
 	for (int32 x = 0; x < ChunkNum; ++x)
@@ -179,21 +36,13 @@ void UVoxelManager::BeginPlay()
 			{
 				FChunkSettingInfo ChunkInfo{ FIntVector(x,y,z), CellSize, CellNum, ChunkNum, 1};
 				ChunkInfo.Calculate();
-
-				const FVector ChunkWorldLocation = GetComponentTransform().TransformPosition(ChunkInfo.ChunkPos);
-				const float DistanceSquared = FVector::DistSquared(ReferenceLocation, ChunkWorldLocation);
-				const float Distance = FMath::Sqrt(DistanceSquared);
-
-				const int32 LODLevel = DetermineLODLevel(Distance);
-				ChunkInfo.LODLevel = LODLevel;
-				ChunkInfo.EffectiveCellNum = DetermineEffectiveCellNum(LODLevel);
-				ChunkInfo.Calculate();
 				
 				UVoxelChunk* Chunk = NewObject<UVoxelChunk>(GetOwner());
 				Chunk->RegisterComponent();
 				Chunk->AttachToComponent(this, FAttachmentTransformRules::KeepRelativeTransform);
 				Chunk->SetRelativeLocation(ChunkInfo.ChunkPos);
-				
+
+				Chunk->InitializeChunk((ChunkInfo));
 				Chunk->SetVoxelManager(this);
 
 				RegisterChunk(FIntVector(x,y,z), Chunk);
@@ -201,7 +50,11 @@ void UVoxelManager::BeginPlay()
 				FChunkGenerationRequest& Request = GenerationRequests.Emplace_GetRef();
 				Request.Chunk = Chunk;
 				Request.Info = ChunkInfo;
-				Request.DistanceSquared = DistanceSquared;
+				const FVector ChunkWorldLocation = GetComponentTransform().TransformPosition(ChunkInfo.ChunkPos);
+				Request.DistanceSquared = FVector::DistSquared(GetReferenceLocation(), ChunkWorldLocation);
+				const float Distance = FMath::Sqrt(Request.DistanceSquared);
+				Request.Info.LODLevel = ComputeLODLevel(Distance);
+				Request.Info.Calculate();
 			}
 
 	GenerationRequests.Shrink();
@@ -214,14 +67,34 @@ void UVoxelManager::BeginPlay()
 	}
 }
 
+// Called when the game starts
+void UVoxelManager::BeginPlay()
+{
+	Super::BeginPlay();
+
+	GenerateChunk();
+}
+
 
 // Called every frame
 void UVoxelManager::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
+	TimeSinceLastLODUpdate += DeltaTime;
+
+	const bool bShouldUpdateLOD = LODUpdateInterval <= 0.0f || TimeSinceLastLODUpdate >= LODUpdateInterval;
+	if (bShouldUpdateLOD)
+	{
+		const FVector ReferenceLocation = GetReferenceLocation();
+		UpdateChunkLODLevels(ReferenceLocation);
+		if (LODUpdateInterval > 0.0f)
+		{
+			TimeSinceLastLODUpdate = 0.0f;
+		}
+	}
+	
 	GenerateCompletedChunk();
-	UpdateChunkLODs();
 }
 
 void UVoxelManager::RegisterChunk(const FIntVector& Index, UVoxelChunk* Chunk)
@@ -289,12 +162,75 @@ void UVoxelManager::Sculpt(const FVector& ImpactPoint, float Radius)
 	}
 }
 
+void UVoxelManager::RecordSculptedDensity(const FChunkSettingInfo& Info, int32 LocalX, int32 LocalY, int32 LocalZ, float Density)
+{
+	FScopeLock Lock(&SculptedDensityLock);
+	UVoxelManager::FChunkSculptOverrides& ChunkOverrides = SculptedDensityMap.FindOrAdd(Info.ChunkIndex);
+	const int32 VertexIndex = VoxelHelper::GetIndex(LocalX, LocalY, LocalZ, Info.CellNum);
+
+	ChunkOverrides.VertexDensities.Add(VertexIndex, FFloat16(Density));
+}
+
+void UVoxelManager::ApplySculptedDensityOverrides(const FChunkSettingInfo& Info, TArray<FVertexDensity>& DensityData)
+{
+	if (DensityData.Num() == 0)
+	{
+		return;
+	}
+
+	FScopeLock Lock(&SculptedDensityLock);
+	const UVoxelManager::FChunkSculptOverrides* ChunkOverrides = SculptedDensityMap.Find(Info.ChunkIndex);
+	if (!ChunkOverrides || ChunkOverrides->VertexDensities.Num() == 0)
+	{
+		return;
+	}
+
+	TArray<int32> KeysToRemove;
+	KeysToRemove.Reserve(ChunkOverrides->VertexDensities.Num());
+
+	for (const TPair<int32, FFloat16>& Override : ChunkOverrides->VertexDensities)
+	{
+		if (!DensityData.IsValidIndex(Override.Key))
+		{
+			KeysToRemove.Add(Override.Key);
+			continue;
+		}
+
+		float& BaseDensity = DensityData[Override.Key].Density;
+		const float OverrideDensity = static_cast<float>(Override.Value);
+
+		if (FMath::IsNearlyEqual(BaseDensity, OverrideDensity))
+		{
+			KeysToRemove.Add(Override.Key);
+			continue;
+		}
+
+		BaseDensity = OverrideDensity;
+	}
+
+	if (KeysToRemove.Num() > 0)
+	{
+		if (UVoxelManager::FChunkSculptOverrides* MutableOverrides = SculptedDensityMap.Find(Info.ChunkIndex))
+		{
+			for (int32 Key : KeysToRemove)
+			{
+				MutableOverrides->VertexDensities.Remove(Key);
+			}
+
+			if (MutableOverrides->VertexDensities.Num() == 0)
+			{
+				SculptedDensityMap.Remove(Info.ChunkIndex);
+			}
+		}
+	}
+}
+
+
 void UVoxelManager::EnqueueGenerateChunk(UVoxelChunk* Chunk, const FChunkSettingInfo& ChunkInfo)
 {
 	if (!IsValid(Chunk)) return;
 
-	FChunkSettingInfo& PendingInfo = PendingChunkInfos.FindOrAdd(ChunkInfo.ChunkIndex);
-	PendingInfo = ChunkInfo;
+	Chunk->SetRequestedLODLevel(ChunkInfo.LODLevel);
 	
 	TWeakObjectPtr<UVoxelManager> ManagerPtr(this);
 	TWeakObjectPtr<UVoxelChunk> ChunkPtr(Chunk);
@@ -302,12 +238,13 @@ void UVoxelManager::EnqueueGenerateChunk(UVoxelChunk* Chunk, const FChunkSetting
 	UE::Tasks::Launch(
 		UE_SOURCE_LOCATION, [ManagerPtr, ChunkPtr, ChunkInfo]()
 		{
-			FChunkBuildResult Result = UVoxelChunk::GenerateChunkData(ChunkInfo);
+			UVoxelManager* Manager = ManagerPtr.Get();
+			FChunkBuildResult Result = UVoxelChunk::GenerateChunkData(ChunkInfo, Manager);
 
-		   if (UVoxelManager* Manager = ManagerPtr.Get())
-		   {
-			   Manager->PushCompletedResult(MoveTemp(Result), ChunkPtr, ChunkInfo);
-		   }
+			if (Manager)
+			{
+				   Manager->PushCompletedResult(MoveTemp(Result), ChunkPtr, ChunkInfo);
+			}
 		},
 	UE::Tasks::ETaskPriority::BackgroundHigh
 	);
@@ -328,11 +265,17 @@ void UVoxelManager::GenerateCompletedChunk()
 		{
 			if (UVoxelChunk* Chunk = PendingResult.Chunk.Get())
 			{
+				// 플레이어 이동에 따라 LOD가 변경되었으면 Mesh를 재생성하지 않고 넘어감, 다른 queue에 있는 변경된 LOD로 mesh 생성 
+				if (PendingResult.Info.LODLevel != Chunk->GetRequestedLODLevel())
+				{
+					++ProcessedCount;
+					++CompletedChunkCount;
+					continue;
+				}
+				
 				Chunk->GenerateChunkMesh(PendingResult.Info, MoveTemp(PendingResult.Result));
 			}
 		}
-
-		PendingChunkInfos.Remove(PendingResult.Info.ChunkIndex);
 
 		++CompletedChunkCount;
 		++ProcessedCount;
@@ -363,5 +306,59 @@ void UVoxelManager::PushCompletedResult(FChunkBuildResult&& Result, const TWeakO
 	Pending.Result = MoveTemp(Result);
 
 	CompletedChunkDataQueue.Enqueue(Pending);
+}
+
+FVector UVoxelManager::GetReferenceLocation() const
+{
+	if (UWorld* World = GetWorld())
+	{
+		if (APawn* Pawn = UGameplayStatics::GetPlayerPawn(World, 0))
+		{
+			return Pawn->GetActorLocation();
+		}
+	}
+	return GetComponentLocation();
+}
+
+int32 UVoxelManager::ComputeLODLevel(float Distance) const
+{
+	int32 LODLevel = 1;
+
+	for (const FLODDistanceLevel& Entry : LODDistanceLevels)
+	{
+		if (Distance > Entry.DistanceThreshold)
+		{
+			LODLevel = FMath::Max(LODLevel, Entry.LODLevel);
+		}
+		else
+		{
+			break;
+		}
+	}
+	
+	return FMath::Clamp(LODLevel, 1, CellNum);
+}
+
+void UVoxelManager::UpdateChunkLODLevels(const FVector& ReferenceLocation)
+{
+	for (auto& Pair : ChunkMap)
+	{
+		UVoxelChunk* Chunk = Pair.Value;
+		if (!IsValid(Chunk))
+		{
+			continue;
+		}
+
+		const float Distance = FVector::Dist(ReferenceLocation, Chunk->GetComponentLocation());
+		const int32 DesiredLOD = ComputeLODLevel(Distance);
+
+		if (DesiredLOD == Chunk->GetCurrentLODLevel() || DesiredLOD == Chunk->GetRequestedLODLevel())
+		{
+			continue;
+		}
+
+		FChunkSettingInfo RequestedInfo = Chunk->MakeChunkSettingInfoForLOD(DesiredLOD);
+		EnqueueGenerateChunk(Chunk, RequestedInfo);
+	}
 }
 
