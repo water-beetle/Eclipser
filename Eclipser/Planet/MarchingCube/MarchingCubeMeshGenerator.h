@@ -8,9 +8,9 @@ public:
 
 private:
 	static FVoxelData GenerateCellMesh(const FChunkSettingInfo& Info, const TArray<FVertexDensity>& VertexDensityData,
-	                                   const FIntVector& CellIndex);
+				const FIntVector& CellIndex, const FIntVector& Step);
 
 	static FVector InterpolateVertex(const FVector& p1, const FVector& p2, float valp1, float valp2);
 
-	static void SetCellCornerIndex(const FIntVector& CellIndex, FVector* V, const FChunkSettingInfo& Info);
+	static void SetCellCornerIndex(const FIntVector& CellIndex, FIntVector* V, const FIntVector& Step);
 };

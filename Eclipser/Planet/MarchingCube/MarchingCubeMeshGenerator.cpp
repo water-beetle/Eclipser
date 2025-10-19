@@ -5,14 +5,23 @@
 FVoxelData MarchingCubeMeshGenerator::GenerateChunkMesh(const FChunkSettingInfo& Info, const TArray<FVertexDensity>& VertexDensityData)
 {
 	FVoxelData ChunkMeshData;
+
+	const int32 RequestedStep = FMath::Max(Info.LODLevel, 1);
 	
-	for (int z = 0; z < Info.CellNum; z += 1)
+	for (int z = 0; z < Info.CellNum; z += RequestedStep)
 	{
-		for (int y = 0; y < Info.CellNum; y += 1)
+		const int32 StepZ = FMath::Min(RequestedStep, Info.CellNum - z);
+		
+		for (int y = 0; y < Info.CellNum; y += RequestedStep)
 		{
-			for (int x = 0; x < Info.CellNum; x += 1)
+			const int32 StepY = FMath::Min(RequestedStep, Info.CellNum - y);
+
+			for (int x = 0; x < Info.CellNum; x += RequestedStep)
 			{
-				FVoxelData CellMeshData = GenerateCellMesh(Info, VertexDensityData, FIntVector(x, y, z));
+				const int32 StepX = FMath::Min(RequestedStep, Info.CellNum - x);
+				const FIntVector StepVector(StepX, StepY, StepZ);
+				
+				FVoxelData CellMeshData = GenerateCellMesh(Info, VertexDensityData, FIntVector(x, y, z), StepVector);
 
 				int baseIndex = ChunkMeshData.Vertices.Num();
 				ChunkMeshData.Vertices.Append(CellMeshData.Vertices);
@@ -27,16 +36,16 @@ FVoxelData MarchingCubeMeshGenerator::GenerateChunkMesh(const FChunkSettingInfo&
 }
 
 FVoxelData MarchingCubeMeshGenerator::GenerateCellMesh(const FChunkSettingInfo& Info, const TArray<FVertexDensity>& VertexDensityData,
-		const FIntVector& CellIndex)
+				const FIntVector& CellIndex, const FIntVector& Step)
 {
 	FVoxelData CellMeshData;
-	FVector CellCornerIndex[8]; // Chunk를 기준으로 Cell의 Index 값들
+	FIntVector CellCornerIndex[8]; // Chunk를 기준으로 Cell의 Index 값들
 	FVector CellCornerPos[8]; // Cell의 중심을 원점으로 하는 Cell 꼭짓점 좌표들
 	float CellCornerDensity[8];
 	const int ChunkSize = Info.CellSize * Info.CellNum;
 
 	// Cell의 앞/좌/위 index값을 기준으로 나머지 정육면체 cell의 index 값들을 계산하는 함수
-	SetCellCornerIndex(CellIndex, CellCornerIndex, Info);
+	SetCellCornerIndex(CellIndex, CellCornerIndex, Step);
 
 	// 정육면체 Cell의 8개 Index 값으로, Cell의 중심을 원점으로 하는 꼭짓점 좌표 8개와, Density 값을 배열에 저장
 	for (int i = 0; i < 8; i += 1)
@@ -44,7 +53,11 @@ FVoxelData MarchingCubeMeshGenerator::GenerateCellMesh(const FChunkSettingInfo& 
 		CellCornerDensity[i] = VertexDensityData[VoxelHelper::GetIndex(
 			CellCornerIndex[i].X, CellCornerIndex[i].Y, CellCornerIndex[i].Z, Info.CellNum)].Density;
 
-		CellCornerPos[i] = CellCornerIndex[i] * Info.CellSize - FVector(ChunkSize) * 0.5f;
+		const FVector CornerIndexVector(
+						static_cast<float>(CellCornerIndex[i].X),
+						static_cast<float>(CellCornerIndex[i].Y),
+						static_cast<float>(CellCornerIndex[i].Z));
+		CellCornerPos[i] = CornerIndexVector * Info.CellSize - FVector(ChunkSize) * 0.5f;
 	}
 
 	// Marching Cube Algorithm으로 Vertex/Triangle 계산 후 저장
@@ -96,7 +109,7 @@ FVector MarchingCubeMeshGenerator::InterpolateVertex(const FVector& p1, const FV
 	return FMath::Lerp(p1, p2, t);
 }
 
-void MarchingCubeMeshGenerator::SetCellCornerIndex(const FIntVector& CellIndex, FVector* V, const FChunkSettingInfo& Info)
+void MarchingCubeMeshGenerator::SetCellCornerIndex(const FIntVector& CellIndex, FIntVector* V, const FIntVector& Step)
 {
 
 /*
@@ -112,12 +125,17 @@ void MarchingCubeMeshGenerator::SetCellCornerIndex(const FIntVector& CellIndex, 
 		 │
 		 └─────────────────→ Y+ (Right)
 */
-	V[4].X = V[5].X = V[0].X = V[1].X = CellIndex.X;
-	V[7].X = V[6].X = V[3].X = V[2].X = CellIndex.X + 1;
 
+	const int32 NextX = CellIndex.X + Step.X;
+	const int32 NextY = CellIndex.Y + Step.Y;
+	const int32 NextZ = CellIndex.Z + Step.Z;
+
+	V[4].X = V[5].X = V[0].X = V[1].X = CellIndex.X;
+	V[7].X = V[6].X = V[3].X = V[2].X = NextX;
+	
 	V[0].Y = V[1].Y = V[2].Y = V[3].Y = CellIndex.Y;
-	V[4].Y = V[5].Y = V[6].Y = V[7].Y = CellIndex.Y + 1;
+	V[4].Y = V[5].Y = V[6].Y = V[7].Y = NextY;
 
 	V[0].Z = V[3].Z = V[4].Z = V[7].Z = CellIndex.Z;
-	V[1].Z = V[2].Z = V[5].Z = V[6].Z = CellIndex.Z + 1;
+	V[1].Z = V[2].Z = V[5].Z = V[6].Z = NextZ;
 }
