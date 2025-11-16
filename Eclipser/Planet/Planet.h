@@ -24,6 +24,6 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-	UPROPERTY(EditAnywhere, Category = "Planet")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Planet")
 	TObjectPtr<UVoxelManager> VoxelManager;
 };

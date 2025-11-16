@@ -3,9 +3,11 @@
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
 #include "Defines/VoxelStructs.h"
+#include "Materials/MaterialInterface.h"
 #include "VoxelManager.generated.h"
 
 class UVoxelChunk;
+class UMaterialInstanceDynamic;
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class ECLIPSER_API UVoxelManager : public USceneComponent
@@ -38,10 +40,20 @@ public:
 	void Sculpt(const FVector& ImpactPoint, float Radius);
 	void RecordSculptedDensity(const FChunkSettingInfo& Info, int32 LocalX, int32 LocalY, int32 LocalZ, float Density);
 	void ApplySculptedDensityOverrides(const FChunkSettingInfo& Info, TArray<FVertexDensity>& DensityData);
+
+	UFUNCTION(BlueprintCallable, Category="Voxel|Rendering")
+	void SetPlanetCenterParameter(const FVector& PlanetCenter);
 	
 private:
-	UPROPERTY(VisibleAnywhere, meta=(AllowPrivateAccess = true))
+	UPROPERTY()
 	TMap<FIntVector, UVoxelChunk*> ChunkMap;
+
+	UPROPERTY(EditAnywhere, Category="Voxel|Rendering", meta=(AllowPrivateAccess=true))
+	TObjectPtr<UMaterialInterface> ChunkMaterial;
+
+	UPROPERTY(Transient)
+	TMap<TWeakObjectPtr<UVoxelChunk>, TObjectPtr<UMaterialInstanceDynamic>> ChunkMaterialInstances;
+	TObjectPtr<UMaterialInstanceDynamic> ChunkMaterialInstance;
 	
 	void GenerateChunk();
 	void EnqueueGenerateChunk(UVoxelChunk* Chunk, const FChunkSettingInfo& ChunkInfo);

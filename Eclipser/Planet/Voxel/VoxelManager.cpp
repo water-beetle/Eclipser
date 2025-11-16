@@ -45,6 +45,19 @@ void UVoxelManager::GenerateChunk()
 				Chunk->InitializeChunk((ChunkInfo));
 				Chunk->SetVoxelManager(this);
 
+				UMaterialInstanceDynamic* ChunkMID = nullptr;
+				if (ChunkMaterial)
+				{
+					ChunkMID = UMaterialInstanceDynamic::Create(ChunkMaterial, this);
+					if (ChunkMID)
+					{
+						Chunk->SetMaterial(0, ChunkMID);
+					}
+				}
+
+				ChunkMaterialInstances.Add(Chunk, ChunkMID);
+
+				
 				RegisterChunk(FIntVector(x,y,z), Chunk);
 
 				FChunkGenerationRequest& Request = GenerationRequests.Emplace_GetRef();
@@ -81,7 +94,7 @@ void UVoxelManager::TickComponent(float DeltaTime, ELevelTick TickType, FActorCo
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	TimeSinceLastLODUpdate += DeltaTime;
+	TimeSinceLastLODUpdate += DeltaTime; 
 
 	const bool bShouldUpdateLOD = LODUpdateInterval <= 0.0f || TimeSinceLastLODUpdate >= LODUpdateInterval;
 	if (bShouldUpdateLOD)
@@ -95,6 +108,8 @@ void UVoxelManager::TickComponent(float DeltaTime, ELevelTick TickType, FActorCo
 	}
 	
 	GenerateCompletedChunk();
+
+	SetPlanetCenterParameter(GetComponentLocation());
 }
 
 void UVoxelManager::RegisterChunk(const FIntVector& Index, UVoxelChunk* Chunk)
@@ -221,6 +236,49 @@ void UVoxelManager::ApplySculptedDensityOverrides(const FChunkSettingInfo& Info,
 			{
 				SculptedDensityMap.Remove(Info.ChunkIndex);
 			}
+		}
+	}
+}
+
+void UVoxelManager::SetPlanetCenterParameter(const FVector& PlanetCenter)
+{
+	TObjectPtr<UMaterialInstanceDynamic> MaterialPtr = nullptr;
+	
+	for (auto It = ChunkMaterialInstances.CreateIterator(); It; ++It)
+	{
+		TWeakObjectPtr<UVoxelChunk> ChunkPtr = It.Key();
+		MaterialPtr = It.Value();
+
+		if (!ChunkPtr.IsValid())
+		{
+			It.RemoveCurrent();
+			continue;
+		}
+
+		UMaterialInstanceDynamic* MaterialInstance = MaterialPtr.Get();
+		if (!MaterialInstance)
+		{
+			if (!ChunkMaterial)
+			{
+				continue;
+			}
+
+			if (UVoxelChunk* Chunk = ChunkPtr.Get())
+			{
+				MaterialInstance = UMaterialInstanceDynamic::Create(ChunkMaterial, this);
+				if (!MaterialInstance)
+				{
+					continue;
+				}
+
+				Chunk->SetMaterial(0, MaterialInstance);
+				MaterialPtr = MaterialInstance;
+			}
+		}
+
+		if (MaterialInstance)
+		{
+			MaterialInstance->SetVectorParameterValue(TEXT("PlanetCenter"), PlanetCenter);
 		}
 	}
 }
