@@ -283,6 +283,11 @@ void UVoxelManager::SetPlanetCenterParameter(const FVector& PlanetCenter)
 	}
 }
 
+int UVoxelManager::GetPlanetRadius() const
+{
+	return CellSize * CellNum * ChunkNum / 2;
+}
+
 
 void UVoxelManager::EnqueueGenerateChunk(UVoxelChunk* Chunk, const FChunkSettingInfo& ChunkInfo)
 {

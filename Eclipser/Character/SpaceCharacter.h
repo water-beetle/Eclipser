@@ -3,23 +3,24 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Components/SphereComponent.h"
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
-#include "EclipserCharacter.generated.h"
+#include "SpaceCharacter.generated.h"
 
 class USpringArmComponent;
 class UCameraComponent;
 class UInputAction;
+class UGravityBody;
 struct FInputActionValue;
 
-DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
 /**
  *  A simple player-controllable third person character
  *  Implements a controllable orbiting camera
  */
 UCLASS(abstract)
-class AEclipserCharacter : public ACharacter
+class ASpaceCharacter : public ACharacter
 {
 	GENERATED_BODY()
 
@@ -30,6 +31,12 @@ class AEclipserCharacter : public ACharacter
 	/** Follow camera */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FollowCamera;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	USceneComponent* CameraRoot;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	USceneComponent* MoveRefRoot;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	UStaticMeshComponent* MoveForwardRef;
 	
 protected:
 
@@ -45,21 +52,18 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input")
 	UInputAction* LookAction;
 
-	/** Mouse Look Input Action */
-	UPROPERTY(EditAnywhere, Category="Input")
-	UInputAction* MouseLookAction;
-
 	UPROPERTY(EditAnywhere, Category="Input")
 	UInputAction* DigAction;
 
 public:
 
 	/** Constructor */
-	AEclipserCharacter();	
+	ASpaceCharacter();	
 
 protected:
 
 	/** Initialize input action bindings */
+	virtual void BeginPlay() override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	virtual void Tick(float DeltaSeconds) override;
 
@@ -70,6 +74,8 @@ protected:
 
 	/** Called for looking input */
 	void Look(const FInputActionValue& Value);
+	void OnLookCompleted(const FInputActionValue& InputActionValue);
+
 
 public:
 
@@ -80,7 +86,7 @@ public:
 	/** Handles look inputs from either controls or UI interfaces */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoLook(float Yaw, float Pitch);
-
+	
 	/** Handles jump pressed inputs from either controls or UI interfaces */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoJumpStart();
@@ -116,5 +122,19 @@ private:
 
 	UPROPERTY(EditAnywhere, Category="Dig")
 	float DigRadius = 50.0f; // 땅 파는 반경
+
+public:
+	/* Gravity */
+	UPROPERTY()
+	UGravityBody* GravityBody;
+	
+	class UGravityBody* GetGravityBody() const {return GravityBody;}
+
+private:
+	/* Gravity */
+	FVector GravityDir;
+	FVector2D LookInput = FVector2D::ZeroVector;
+	
+	void UpdateCamera() const; // 중력 방향에 따라 Camera의 UpVector를 매초 Update해주는 함수
 };
 

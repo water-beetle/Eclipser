@@ -43,6 +43,8 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="Voxel|Rendering")
 	void SetPlanetCenterParameter(const FVector& PlanetCenter);
+
+	int GetPlanetRadius() const;
 	
 private:
 	UPROPERTY()

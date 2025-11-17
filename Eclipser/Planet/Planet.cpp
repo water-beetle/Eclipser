@@ -3,6 +3,7 @@
 
 #include "Planet.h"
 
+#include "Gravity/GravityFieldCenter.h"
 #include "Voxel/VoxelManager.h"
 
 
@@ -13,13 +14,17 @@ APlanet::APlanet()
 	PrimaryActorTick.bCanEverTick = true;
 
 	VoxelManager = CreateDefaultSubobject<UVoxelManager>("VoxelManager");
+	GravityField = CreateDefaultSubobject<UGravityFieldCenter>("GravityField");
+	GravityField->SetupAttachment(RootComponent);
 }
 
 // Called when the game starts or when spawned
 void APlanet::BeginPlay()
 {
 	Super::BeginPlay();
-	
+
+	PlanetRadius = VoxelManager->GetPlanetRadius();
+	GravityField->SetGravityFieldSize(PlanetRadius);
 }
 
 // Called every frame

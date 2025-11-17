@@ -5,6 +5,7 @@
 #include "GameFramework/Actor.h"
 #include "Planet.generated.h"
 
+class UGravityField;
 class UVoxelManager;
 
 UCLASS()
@@ -26,4 +27,10 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Planet")
 	TObjectPtr<UVoxelManager> VoxelManager;
+
+	UPROPERTY(EditAnywhere, Category="Planet")
+	TObjectPtr<UGravityField> GravityField;
+
+private:
+	int PlanetRadius = 1000;
 };
