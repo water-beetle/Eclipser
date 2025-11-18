@@ -8,6 +8,9 @@
 
 // Sets default values for this component's properties
 UGravityBody::UGravityBody()
+	: CurrentGravityField(nullptr)
+	,LastGravityDirection(FVector::DownVector)
+
 {
 	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
 	// off to improve performance if you don't need them.
@@ -53,7 +56,9 @@ void UGravityBody::AddGravityArea(UGravityField* GravityField)
 		if (!CurrentGravityField || GravityField->Priority > CurrentGravityField->Priority)
 		{
 			CurrentGravityField = GravityField;
+			IsInGravityField = true;
 			GravityCharacter->GetCharacterMovement()->GravityScale = CurrentGravityField->GravityScale;
+			GravityCharacter->GetCharacterMovement()->SetMovementMode(MOVE_Falling);
 		}
 	}
 }
@@ -75,7 +80,9 @@ void UGravityBody::RemoveGravityArea(UGravityField* GravityField)
 		if (GravityFields.Num() == 0)
 		{
 			GravityCharacter->GetCharacterMovement()->GravityScale = 0.0f;
+			GravityCharacter->GetCharacterMovement()->SetMovementMode(MOVE_Flying);
 			CurrentGravityField = nullptr;
+			IsInGravityField = false;
 		}
 		else
 		{
@@ -96,10 +103,15 @@ FVector UGravityBody::GetGravityDirection()
 	// GravityFields가 비어있거나 CurrentGravityField가 없으면 기본 방향 반환
 	if (GravityFields.Num() == 0 || !CurrentGravityField)
 	{
-		return FVector::ForwardVector;
+		return LastGravityDirection;
 	}
 	
 	// 가장 우선순위가 높은 중력 영역의 방향 반환
-	return CurrentGravityField->GetGravityDirection(this);
+	const FVector CurrentDirection = CurrentGravityField->GetGravityDirection(this).GetSafeNormal();
+	if (!CurrentDirection.IsNearlyZero())
+	{
+		LastGravityDirection = CurrentDirection;
+	}
+	return LastGravityDirection;
 }
 

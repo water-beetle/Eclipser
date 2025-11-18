@@ -220,6 +220,8 @@ void UVoxelChunk::UpdateMesh(const FVoxelData& VoxelMeshData)
 void UVoxelChunk::GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray<FVertexDensity>& OutDensityData, UVoxelManager* Manager)
 {
 	OutDensityData.SetNum((Info.CellNum+1) * (Info.CellNum+1) * (Info.CellNum+1));
+	const int PlanetRadius = Manager ? Manager->GetPlanetRadius()
+			: FMath::Max(0, Info.VoxelSize);
 	
 	for (int z=0; z < Info.CellNum + 1; z += 1)
 	{
@@ -228,7 +230,7 @@ void UVoxelChunk::GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray
 			for (int x=0; x < Info.CellNum + 1; x += 1)
 			{
 				FVector Pos = FVector(x, y, z) * Info.CellSize - FVector(Info.ChunkSize) * 0.5f + Info.ChunkPos;
-				OutDensityData[VoxelHelper::GetIndex(x,y,z,Info.CellNum)].Density = CalculateDensity(Pos, Info.VoxelSize * 0.3f);
+				OutDensityData[VoxelHelper::GetIndex(x,y,z,Info.CellNum)].Density = CalculateDensity(Pos, PlanetRadius);
 			}
 		}
 	}

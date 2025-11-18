@@ -81,8 +81,9 @@ void ASpaceCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
+	GetCharacterMovement()->GravityScale = 0.0f;
 	CameraRoot->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
-	GetCharacterMovement()->SetMovementMode(MOVE_Falling);
+	//GetCharacterMovement()->SetMovementMode(MOVE_Falling);
 }
 
 void ASpaceCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -119,15 +120,18 @@ void ASpaceCharacter::Tick(float DeltaSeconds)
 	FVector TargetGravityDir = GravityBody->GetGravityDirection().GetSafeNormal();
 
 	// 현재 중력 방향에서 목표 중력 방향으로 점진적으로 보간
-	//const float GravityChangeSpeed = 5.0f; // 중력 방향 변화 속도 (값이 클수록 빠르게 반응)
+	//const float GravityChangeSpeed = 5.f; // 중력 방향 변화 속도 (값이 클수록 빠르게 반응)
 	//GravityDir = FMath::VInterpTo(GravityDir, TargetGravityDir, DeltaSeconds, GravityChangeSpeed).GetSafeNormal();
 	
-	//GetCharacterMovement()->SetGravityDirection(GravityDir);
-
-	UpdateCamera();
 	GetCharacterMovement()->SetGravityDirection(TargetGravityDir);
 
-	UE_LOG(LogTemp, Warning, TEXT("Speed = %s"), *(GetCharacterMovement()->Velocity).ToString());
+	UpdateCamera();
+	CheckIsLanding();
+	
+	if (bRotateToLanding)
+	{
+		UpdateSmoothRotation(DeltaSeconds);
+	}
 }
 
 void ASpaceCharacter::Move(const FInputActionValue& Value)
@@ -213,6 +217,42 @@ void ASpaceCharacter::UpdateCamera() const
 	MoveRefRoot->SetRelativeRotation(FRotator(0, CameraBoom->GetRelativeRotation().Yaw, 0));
 }
 
+void ASpaceCharacter::CheckIsLanding()
+{
+	const FVector TraceStart = GetMesh()->GetComponentLocation();
+	const FVector TraceEnd = TraceStart - (GetActorUpVector() * 10);
+	FHitResult HitResult;
+
+	IsLanding = GetWorld()->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, DigTraceChannel);
+}
+
+void ASpaceCharacter::StartSmoothLanding(const FVector& GravityCenter)
+{
+	FVector Dir = (GravityCenter - GetActorLocation()).GetSafeNormal();
+	TargetLandingRotation = FRotationMatrix::MakeFromZ(Dir).Rotator();
+
+	bRotateToLanding = true;
+}
+
+void ASpaceCharacter::UpdateSmoothRotation(float DeltaTime)
+{
+	const float Speed = 5.f;
+
+	FQuat NewQuat = FMath::QInterpTo(
+		GetActorQuat(),
+		TargetLandingRotation.Quaternion(),
+		DeltaTime,
+		Speed
+	);
+
+	SetActorRotation(NewQuat);
+
+	if (NewQuat.Equals(TargetLandingRotation.Quaternion(), 0.001f))
+	{
+		bRotateToLanding = false;
+	}
+}
+
 
 void ASpaceCharacter::DoMove(float Right, float Forward)
 {
@@ -233,8 +273,16 @@ void ASpaceCharacter::DoMove(float Right, float Forward)
 	// 	AddMovementInput(RightDirection, Right);
 	// }
 
-	const FVector ForwardDirection = (MoveForwardRef->GetComponentLocation() - GetActorLocation()).GetSafeNormal();
+	FVector ForwardDirection = FVector::Zero();
 
+	if (GetGravityBody()->IsInGravityField)
+	{
+		ForwardDirection = (MoveForwardRef->GetComponentLocation() - GetActorLocation()).GetSafeNormal();
+	}
+	else
+	{
+		ForwardDirection = FollowCamera->GetForwardVector();
+	}
 	AddMovementInput(ForwardDirection, Forward);
 	AddMovementInput(GetFollowCamera()->GetRightVector(), Right);
 }

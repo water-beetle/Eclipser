@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GravityBody.h"
 #include "Components/SphereComponent.h"
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
@@ -134,7 +135,18 @@ private:
 	/* Gravity */
 	FVector GravityDir;
 	FVector2D LookInput = FVector2D::ZeroVector;
-	
+	FRotator TargetLandingRotation;
+	bool bRotateToLanding;
+
 	void UpdateCamera() const; // 중력 방향에 따라 Camera의 UpVector를 매초 Update해주는 함수
+	void CheckIsLanding();
+	void StartSmoothLanding(const FVector& GravityCenter);
+	void UpdateSmoothRotation(float DeltaTime);
+	
+	/* Character Info */
+	UPROPERTY(BlueprintReadOnly, meta=(AllowPrivateAccess="true"))
+	bool IsLanding = false;
+	
+
 };
 

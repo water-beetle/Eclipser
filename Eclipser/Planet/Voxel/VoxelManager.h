@@ -4,6 +4,7 @@
 #include "Components/SceneComponent.h"
 #include "Defines/VoxelStructs.h"
 #include "Materials/MaterialInterface.h"
+#include "Planet/Planet.h"
 #include "VoxelManager.generated.h"
 
 class UVoxelChunk;
@@ -30,13 +31,18 @@ public:
 	void RegisterChunk(const FIntVector& Index, UVoxelChunk* Chunk);
 	UVoxelChunk* GetChunk(const FIntVector& Index);
 
-	UPROPERTY(EditAnywhere, Category="Voxel")
+	UPROPERTY(VisibleAnywhere, Category="Voxel", meta=(AllowPrivateAccess=true))
 	int CellSize;
-	UPROPERTY(EditAnywhere, Category="Voxel")
+	UPROPERTY(VisibleAnywhere, Category="Voxel", meta=(AllowPrivateAccess=true))
 	int CellNum;
-	UPROPERTY(EditAnywhere, Category="Voxel")
+	UPROPERTY(VisibleAnywhere, Category="Voxel", meta=(AllowPrivateAccess=true))
 	int ChunkNum;
-
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Voxel", meta=(AllowPrivateAccess=true))
+	int PlanetRadius = 0;
+	
+	void SetPlanetRadius(int InPlanetRadius);
+	int32 GetPlanetRadius() const { return PlanetRadius; }
+	
 	void Sculpt(const FVector& ImpactPoint, float Radius);
 	void RecordSculptedDensity(const FChunkSettingInfo& Info, int32 LocalX, int32 LocalY, int32 LocalZ, float Density);
 	void ApplySculptedDensityOverrides(const FChunkSettingInfo& Info, TArray<FVertexDensity>& DensityData);
@@ -44,7 +50,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Voxel|Rendering")
 	void SetPlanetCenterParameter(const FVector& PlanetCenter);
 
-	int GetPlanetRadius() const;
+	void SetVoxelSettings(int32 InCellSize, int32 InCellNum, int32 InChunkNum);
+	int32 GetCellSize() const { return CellSize; }
+	int32 GetCellNum() const { return CellNum; }
+	int32 GetChunkNum() const { return ChunkNum; }
 	
 private:
 	UPROPERTY()

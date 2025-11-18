@@ -26,9 +26,12 @@ protected:
 public:
 	void AddGravityArea(UGravityField* GravityField);
 	void RemoveGravityArea(UGravityField* GravityField);
+	UGravityField* GetGravityField() const {return CurrentGravityField;};
 	FVector GetGravityDirection();
+	bool IsInGravityField = false;
 
 private:
 	TArray<UGravityField*> GravityFields;
 	UGravityField* CurrentGravityField;
+	FVector LastGravityDirection;
 };

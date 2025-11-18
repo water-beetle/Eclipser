@@ -23,13 +23,96 @@ void APlanet::BeginPlay()
 {
 	Super::BeginPlay();
 
-	PlanetRadius = VoxelManager->GetPlanetRadius();
-	GravityField->SetGravityFieldSize(PlanetRadius);
+	UpdatePlanetConfiguration();
+}
+
+void APlanet::OnConstruction(const FTransform& Transform)
+{
+	Super::OnConstruction(Transform);
+
+	UpdatePlanetConfiguration();
 }
 
 // Called every frame
 void APlanet::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+}
+
+void APlanet::UpdatePlanetConfiguration()
+{
+	if (!VoxelManager)
+	{
+		PlanetDiameter = 0;
+		PlanetRadius = 0;
+		return;
+	}
+
+	if (!HasValidVoxelConfiguration())
+	{
+		CacheVoxelSettingsFromManager();
+	}
+
+	if (!HasValidVoxelConfiguration())
+	{
+		PlanetDiameter = 0;
+		PlanetRadius = 0;
+		return;
+	}
+
+	VoxelManager->SetVoxelSettings(CellSize, CellNum, ChunkNum);
+
+	PlanetDiameter = CalculatePlanetDiameter();
+	if (PlanetRadius < 0 || PlanetRadius > PlanetDiameter / 2)
+		PlanetRadius = PlanetDiameter / 2;
+
+	if (GravityField)
+	{
+		GravityField->SetGravityFieldSize(PlanetRadius * 1.5);
+	}
+
+	VoxelManager->SetPlanetRadius(PlanetRadius);
+}
+
+bool APlanet::HasValidVoxelConfiguration() const
+{
+	return CellSize > 0 && CellNum > 0 && ChunkNum > 0;
+}
+
+int32 APlanet::CalculatePlanetDiameter() const
+{
+	const int64 CalculatedDiameter = static_cast<int64>(CellSize) * CellNum * ChunkNum;
+	const int64 ClampedDiameter = FMath::Clamp<int64>(CalculatedDiameter, 0, TNumericLimits<int32>::Max());
+	return static_cast<int32>(ClampedDiameter);
+}
+
+void APlanet::CacheVoxelSettingsFromManager()
+{
+	if (!VoxelManager)
+	{
+		return;
+	}
+
+	if (CellSize <= 0)
+	{
+		CellSize = VoxelManager->GetCellSize();
+	}
+
+	if (CellNum <= 0)
+	{
+		CellNum = VoxelManager->GetCellNum();
+	}
+
+	if (ChunkNum <= 0)
+	{
+		ChunkNum = VoxelManager->GetChunkNum();
+	}
+}
+
+void APlanet::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+
+	UpdatePlanetConfiguration();
 }
 

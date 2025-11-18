@@ -126,6 +126,11 @@ UVoxelChunk* UVoxelManager::GetChunk(const FIntVector& Index)
 	return nullptr;
 }
 
+void UVoxelManager::SetPlanetRadius(int InPlanetRadius)
+{
+	PlanetRadius = FMath::Max(0, InPlanetRadius);
+}
+
 void UVoxelManager::Sculpt(const FVector& ImpactPoint, float Radius)
 {
 	// Sculpt 지점과, 반지름에 영향을 받는 Chunk만 다시 Density 계산 후 mesh 재생성
@@ -283,9 +288,11 @@ void UVoxelManager::SetPlanetCenterParameter(const FVector& PlanetCenter)
 	}
 }
 
-int UVoxelManager::GetPlanetRadius() const
+void UVoxelManager::SetVoxelSettings(int32 InCellSize, int32 InCellNum, int32 InChunkNum)
 {
-	return CellSize * CellNum * ChunkNum / 2;
+	CellSize = InCellSize;
+	CellNum = InCellNum;
+	ChunkNum = InChunkNum;
 }
 
 
