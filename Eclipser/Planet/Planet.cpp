@@ -12,10 +12,14 @@ APlanet::APlanet()
 {
 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
-
+	
+	PlanetRoot = CreateDefaultSubobject<USceneComponent>(TEXT("PlanetRoot"));
+	SetRootComponent(PlanetRoot);
+	
 	VoxelManager = CreateDefaultSubobject<UVoxelManager>("VoxelManager");
+	VoxelManager->SetupAttachment(PlanetRoot);
 	GravityField = CreateDefaultSubobject<UGravityFieldCenter>("GravityField");
-	GravityField->SetupAttachment(RootComponent);
+	GravityField->SetupAttachment(PlanetRoot);
 }
 
 // Called when the game starts or when spawned

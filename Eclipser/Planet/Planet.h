@@ -40,6 +40,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="PlanetSettings|Voxel", meta=(AllowPrivateAccess=true))
 	int32 PlanetDiameter = 0;
 	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="PlanetComponent", meta=(AllowPrivateAccess=true))
+	TObjectPtr<USceneComponent> PlanetRoot;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "PlanetComponent")
 	TObjectPtr<UVoxelManager> VoxelManager;
 

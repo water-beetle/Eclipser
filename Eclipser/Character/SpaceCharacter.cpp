@@ -120,18 +120,18 @@ void ASpaceCharacter::Tick(float DeltaSeconds)
 	FVector TargetGravityDir = GravityBody->GetGravityDirection().GetSafeNormal();
 
 	CheckIsLanding();
-	
+
 	float Dot = FVector::DotProduct(GravityDir, TargetGravityDir);
+	Dot = FMath::Clamp(Dot, -1.f, 1.f);
 	float t = (1.f - Dot) * 0.5f;
-	float SmoothT = t * t * (3.f - 2.f * t); // smoothstep
 
-	const float BaseSpeed   = 2.f;   // 기본 중력 변경 속도
-	const float MinFactor   = 0.01f; // 정반대 방향일 때까지 떨어질 최소 비율 (0~1)
-	float AngleFactor = FMath::Lerp(1.f, MinFactor, SmoothT);
+	const float BaseSpeed = 3.f;
+	const float MinFactor = 0.05f;   // 정반대일 때 속도 비율 (0~1)
 
+
+	float AngleFactor = 1.f - t * (1.f - MinFactor);
 	float GravityChangeSpeed = BaseSpeed * AngleFactor;
-
-	// 부드러운 방향 보간
+	
 	GravityDir = FMath::VInterpTo(GravityDir, TargetGravityDir, DeltaSeconds, GravityChangeSpeed).GetSafeNormal();
 	GetCharacterMovement()->SetGravityDirection(GravityDir);
 
