@@ -119,19 +119,23 @@ void ASpaceCharacter::Tick(float DeltaSeconds)
 
 	FVector TargetGravityDir = GravityBody->GetGravityDirection().GetSafeNormal();
 
-	// 현재 중력 방향에서 목표 중력 방향으로 점진적으로 보간
-	//const float GravityChangeSpeed = 5.f; // 중력 방향 변화 속도 (값이 클수록 빠르게 반응)
-	//GravityDir = FMath::VInterpTo(GravityDir, TargetGravityDir, DeltaSeconds, GravityChangeSpeed).GetSafeNormal();
-	
-	GetCharacterMovement()->SetGravityDirection(TargetGravityDir);
-
-	UpdateCamera();
 	CheckIsLanding();
 	
-	if (bRotateToLanding)
-	{
-		UpdateSmoothRotation(DeltaSeconds);
-	}
+	float Dot = FVector::DotProduct(GravityDir, TargetGravityDir);
+	float t = (1.f - Dot) * 0.5f;
+	float SmoothT = t * t * (3.f - 2.f * t); // smoothstep
+
+	const float BaseSpeed   = 2.f;   // 기본 중력 변경 속도
+	const float MinFactor   = 0.01f; // 정반대 방향일 때까지 떨어질 최소 비율 (0~1)
+	float AngleFactor = FMath::Lerp(1.f, MinFactor, SmoothT);
+
+	float GravityChangeSpeed = BaseSpeed * AngleFactor;
+
+	// 부드러운 방향 보간
+	GravityDir = FMath::VInterpTo(GravityDir, TargetGravityDir, DeltaSeconds, GravityChangeSpeed).GetSafeNormal();
+	GetCharacterMovement()->SetGravityDirection(GravityDir);
+
+	UpdateCamera();
 }
 
 void ASpaceCharacter::Move(const FInputActionValue& Value)
@@ -225,34 +229,6 @@ void ASpaceCharacter::CheckIsLanding()
 
 	IsLanding = GetWorld()->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, DigTraceChannel);
 }
-
-void ASpaceCharacter::StartSmoothLanding(const FVector& GravityCenter)
-{
-	FVector Dir = (GravityCenter - GetActorLocation()).GetSafeNormal();
-	TargetLandingRotation = FRotationMatrix::MakeFromZ(Dir).Rotator();
-
-	bRotateToLanding = true;
-}
-
-void ASpaceCharacter::UpdateSmoothRotation(float DeltaTime)
-{
-	const float Speed = 5.f;
-
-	FQuat NewQuat = FMath::QInterpTo(
-		GetActorQuat(),
-		TargetLandingRotation.Quaternion(),
-		DeltaTime,
-		Speed
-	);
-
-	SetActorRotation(NewQuat);
-
-	if (NewQuat.Equals(TargetLandingRotation.Quaternion(), 0.001f))
-	{
-		bRotateToLanding = false;
-	}
-}
-
 
 void ASpaceCharacter::DoMove(float Right, float Forward)
 {
