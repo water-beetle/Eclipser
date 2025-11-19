@@ -80,10 +80,14 @@ ASpaceCharacter::ASpaceCharacter()
 void ASpaceCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-
-	GetCharacterMovement()->GravityScale = 0.0f;
+	
+	if (!GravityBody->IsInGravityField)
+	{
+		GetCharacterMovement()->GravityScale = 0.0f;
+		GetCharacterMovement()->SetMovementMode(MOVE_Flying);
+	}
 	CameraRoot->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
-	//GetCharacterMovement()->SetMovementMode(MOVE_Falling);
+	GetCharacterMovement()->SetMovementMode(MOVE_Falling);
 }
 
 void ASpaceCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -113,11 +117,13 @@ void ASpaceCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 	}
 }
 
-void ASpaceCharacter::Tick(float DeltaSeconds)
+void ASpaceCharacter::UpdateGravity(float DeltaSeconds)
 {
-	Super::Tick(DeltaSeconds);
-
 	FVector TargetGravityDir = GravityBody->GetGravityDirection().GetSafeNormal();
+	if (TargetGravityDir.IsNearlyZero())
+	{
+		TargetGravityDir = GravityDir;
+	}
 
 	CheckIsLanding();
 
@@ -125,8 +131,8 @@ void ASpaceCharacter::Tick(float DeltaSeconds)
 	Dot = FMath::Clamp(Dot, -1.f, 1.f);
 	float t = (1.f - Dot) * 0.5f;
 
-	const float BaseSpeed = 3.f;
-	const float MinFactor = 0.05f;   // 정반대일 때 속도 비율 (0~1)
+	const float BaseSpeed = FMath::Max(0.f, GravityBlendSpeed);
+	const float MinFactor = FMath::Clamp(GravityOppositeFactor, 0.f, 1.f);   // 정반대일 때 속도 비율 (0~1)
 
 
 	float AngleFactor = 1.f - t * (1.f - MinFactor);
@@ -134,7 +140,13 @@ void ASpaceCharacter::Tick(float DeltaSeconds)
 	
 	GravityDir = FMath::VInterpTo(GravityDir, TargetGravityDir, DeltaSeconds, GravityChangeSpeed).GetSafeNormal();
 	GetCharacterMovement()->SetGravityDirection(GravityDir);
+}
 
+void ASpaceCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	UpdateGravity(DeltaSeconds);
 	UpdateCamera();
 }
 
@@ -215,7 +227,7 @@ void ASpaceCharacter::UpdateCamera() const
 	
 	CameraBoom->SetRelativeRotation(FRotator(UpdatedPitch, UpdatedYaw, 0));
 
-	FRotator CameraRootRot = FRotationMatrix::MakeFromZX(-GetGravityDirection(), CameraRoot->GetForwardVector()).Rotator();
+	FRotator CameraRootRot = FRotationMatrix::MakeFromZX(-GravityDir, CameraRoot->GetForwardVector()).Rotator();
 	CameraRoot->SetWorldLocationAndRotation(GetActorLocation(), CameraRootRot);
 
 	MoveRefRoot->SetRelativeRotation(FRotator(0, CameraBoom->GetRelativeRotation().Yaw, 0));

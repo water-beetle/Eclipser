@@ -48,21 +48,19 @@ void UGravityField::SetGravityFieldSize(float Radius)
 void UGravityField::AddCharacterToGravityField()
 {
 	TArray<AActor*> OverlappingActors;
-	GetOwner()->GetOverlappingActors(OverlappingActors);
+	GetOverlappingActors(OverlappingActors, ASpaceCharacter::StaticClass());
 
 	for (AActor* OverlappingActor : OverlappingActors)
 	{
-		if (OverlappingActor && OverlappingActor != GetOwner()) // 자기 자신 제외
+		ASpaceCharacter* SpaceCharacter = Cast<ASpaceCharacter>(OverlappingActor);
+		if (!SpaceCharacter)
 		{
-			// 특정 클래스 타입(ASpaceCharacter)인지 확인
-			if (OverlappingActor->IsA(ASpaceCharacter::StaticClass()))
-			{
-				ASpaceCharacter* SpaceCharacter = Cast<ASpaceCharacter>(OverlappingActor);
-				if (SpaceCharacter)
-				{
-					SpaceCharacter-> GetGravityBody()->AddGravityArea(this);
-				}
-			}
+			continue;
+		}
+
+		if (UGravityBody* GravityBody = SpaceCharacter-> GetGravityBody())
+		{
+			GravityBody->AddGravityArea(this);
 		}
 	}
 }

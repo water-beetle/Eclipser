@@ -66,6 +66,7 @@ protected:
 	/** Initialize input action bindings */
 	virtual void BeginPlay() override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	void UpdateGravity(float DeltaSeconds);
 	virtual void Tick(float DeltaSeconds) override;
 
 protected:
@@ -128,6 +129,12 @@ public:
 	/* Gravity */
 	UPROPERTY()
 	UGravityBody* GravityBody;
+
+	UPROPERTY(EditAnywhere, Category="Gravity", meta=(ClampMin="0.0"))
+	float GravityBlendSpeed = 3.f;
+
+	UPROPERTY(EditAnywhere, Category="Gravity", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float GravityOppositeFactor = 0.05f;
 	
 	class UGravityBody* GetGravityBody() const {return GravityBody;}
 
