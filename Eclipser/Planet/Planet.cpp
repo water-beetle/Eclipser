@@ -74,8 +74,14 @@ void APlanet::UpdatePlanetConfiguration()
 	VoxelManager->SetVoxelSettings(CellSize, CellNum, ChunkNum);
 
 	PlanetDiameter = CalculatePlanetDiameter();
-	if (PlanetRadius < 0 || PlanetRadius > PlanetDiameter / 2)
-		PlanetRadius = PlanetDiameter / 2;
+
+	const FPlanetNoiseSettings* NoiseSettings = VoxelManager ? &VoxelManager->GetNoiseSettings() : nullptr;
+	const int32 MaxSurfaceOffset = (NoiseSettings && NoiseSettings->bEnableNoise)
+			? FMath::CeilToInt(FMath::Max(NoiseSettings->MaxRaise, 0.0f))
+			: 0;
+
+	const int32 MaxAllowedRadius = PlanetDiameter / 2 - MaxSurfaceOffset;
+	PlanetRadius = FMath::Clamp(PlanetRadius, 0, FMath::Max(0, MaxAllowedRadius));
 
 	if (GravityField)
 	{
