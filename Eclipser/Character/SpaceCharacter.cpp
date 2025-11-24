@@ -236,7 +236,7 @@ void ASpaceCharacter::UpdateCamera() const
 void ASpaceCharacter::CheckIsLanding()
 {
 	const FVector TraceStart = GetMesh()->GetComponentLocation();
-	const FVector TraceEnd = TraceStart - (GetActorUpVector() * 10);
+	const FVector TraceEnd = TraceStart - (GetActorUpVector() * 100);
 	FHitResult HitResult;
 
 	IsLanding = GetWorld()->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, DigTraceChannel);
