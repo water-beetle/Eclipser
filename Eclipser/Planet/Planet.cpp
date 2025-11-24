@@ -83,9 +83,11 @@ void APlanet::UpdatePlanetConfiguration()
 	const int32 MaxAllowedRadius = PlanetDiameter / 2 - MaxSurfaceOffset;
 	PlanetRadius = FMath::Clamp(PlanetRadius, 0, FMath::Max(0, MaxAllowedRadius));
 
+	const int32 SurfaceRadius = PlanetRadius + MaxSurfaceOffset;
+
 	if (GravityField)
 	{
-		GravityField->SetGravityFieldSize(PlanetRadius * 1.5);
+		GravityField->SetGravityFieldSize(SurfaceRadius * 1.2f);
 	}
 
 	VoxelManager->SetPlanetRadius(PlanetRadius);

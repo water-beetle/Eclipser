@@ -14,7 +14,7 @@ UGravityField::UGravityField()
 
 	GravityScale = 1.0f;
 	SetWorldScale3D(FVector(1.f));
-	//SetHiddenInGame(false);
+	SetHiddenInGame(false);
 }
 
 
