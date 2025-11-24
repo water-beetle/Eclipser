@@ -54,6 +54,7 @@ public:
 	int32 GetCellSize() const { return CellSize; }
 	int32 GetCellNum() const { return CellNum; }
 	int32 GetChunkNum() const { return ChunkNum; }
+	const FPlanetNoiseSettings& GetNoiseSettings() const { return NoiseSettings; }
 	
 private:
 	UPROPERTY()
@@ -106,4 +107,7 @@ private:
 		TMap<int32, FFloat16> VertexDensities;
 	};
 	TMap<FIntVector, FChunkSculptOverrides> SculptedDensityMap;
+
+	UPROPERTY(EditAnywhere, Category="Voxel|Noise", meta=(AllowPrivateAccess=true))
+	FPlanetNoiseSettings NoiseSettings;
 };

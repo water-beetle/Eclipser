@@ -64,7 +64,7 @@ private:
 	
 	void UpdateMesh(const FVoxelData& VoxelMeshData);
 	static void GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray<FVertexDensity>& OutDensityData, UVoxelManager* Manager);
-	static float CalculateDensity(const FVector& Pos, int Radius);
+	static float CalculateDensity(const FVector& Pos, int Radius, const FPlanetNoiseSettings* NoiseSettings);
 
 	UPROPERTY()
 	UVoxelManager* OwningManager = nullptr;

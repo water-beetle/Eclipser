@@ -4,6 +4,7 @@
 #include "Planet.h"
 
 #include "Gravity/GravityFieldCenter.h"
+#include "Foliage/PlanetGrass.h"
 #include "Voxel/VoxelManager.h"
 
 
@@ -20,6 +21,8 @@ APlanet::APlanet()
 	VoxelManager->SetupAttachment(PlanetRoot);
 	GravityField = CreateDefaultSubobject<UGravityFieldCenter>("GravityField");
 	GravityField->SetupAttachment(PlanetRoot);
+	GrassComponent = CreateDefaultSubobject<UPlanetGrass>(TEXT("PlanetGrass"));
+	GrassComponent->SetupAttachment(PlanetRoot);
 }
 
 // Called when the game starts or when spawned
@@ -35,6 +38,10 @@ void APlanet::OnConstruction(const FTransform& Transform)
 	Super::OnConstruction(Transform);
 
 	UpdatePlanetConfiguration();
+	if (GrassComponent)
+	{
+		GrassComponent->RegenerateGrassInstances();
+	}
 }
 
 // Called every frame

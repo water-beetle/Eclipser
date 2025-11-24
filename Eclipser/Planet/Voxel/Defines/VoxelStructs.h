@@ -99,3 +99,46 @@ struct FChunkGenerationRequest
 	FChunkSettingInfo Info;
 	float DistanceSquared = 0.0f;
 };
+
+USTRUCT(BlueprintType)
+struct FPlanetNoiseSettings
+{
+	GENERATED_BODY();
+
+	UPROPERTY(EditAnywhere, Category="Noise")
+	bool bEnableNoise = true;
+
+	UPROPERTY(EditAnywhere, Category="Noise", meta=(ClampMin=1))
+	int32 Octaves = 4;
+
+	UPROPERTY(EditAnywhere, Category="Noise", meta=(ClampMin=0.000001))
+	float BaseFrequency = 0.0002f;
+
+	UPROPERTY(EditAnywhere, Category="Noise", meta=(ClampMin=0.0))
+	float Amplitude = 300.0f;
+
+	UPROPERTY(EditAnywhere, Category="Noise", meta=(ClampMin=1.0))
+	float Lacunarity = 2.0f;
+
+	UPROPERTY(EditAnywhere, Category="Noise", meta=(ClampMin=0.0, ClampMax=1.0))
+	float Gain = 0.5f;
+
+	// ─ Warp(좌표 뒤틀기) ─
+	UPROPERTY(EditAnywhere, Category="Noise|Warp", meta=(ClampMin=0.0))
+	float WarpStrength = 30.0f;
+
+	UPROPERTY(EditAnywhere, Category="Noise|Warp", meta=(ClampMin=0.0))
+	float WarpFrequencyMultiplier = 2.0f;
+
+	// ─ 안전장치: 노이즈 영향 범위 & 크기 제한 ─
+	// Radius 기준으로 "표면 위/아래" 얼마나 깊이까지 노이즈를 줄지
+	UPROPERTY(EditAnywhere, Category="Noise|Safety", meta=(ClampMin=1.0))
+	float AffectDepth = 800.0f;   // 표면 ±800 범위까지만 노이즈 적용
+
+	// 반지름 기준, 최대 산 높이 / 최대 파이는 깊이
+	UPROPERTY(EditAnywhere, Category="Noise|Safety", meta=(ClampMin=0.0))
+	float MaxRaise = 800.0f;      // Radius보다 최대 얼마나 더 튀어나갈 수 있는지
+
+	UPROPERTY(EditAnywhere, Category="Noise|Safety", meta=(ClampMin=0.0))
+	float MaxDepression = 400.0f; // Radius보다 최대 얼마나 파일 수 있는지
+};

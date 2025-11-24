@@ -7,6 +7,7 @@
 
 class UGravityField;
 class UVoxelManager;
+class UPlanetGrass;
 
 UCLASS()
 class ECLIPSER_API APlanet : public AActor
@@ -49,6 +50,8 @@ public:
 	UPROPERTY(EditAnywhere, Category="PlanetComponent")
 	TObjectPtr<UGravityField> GravityField;
 
+	UPROPERTY(EditAnywhere, Category="PlanetComponent")
+	TObjectPtr<UPlanetGrass> GrassComponent;
 private:
 	void UpdatePlanetConfiguration();
 	bool HasValidVoxelConfiguration() const;

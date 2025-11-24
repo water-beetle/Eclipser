@@ -222,6 +222,8 @@ void UVoxelChunk::GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray
 	OutDensityData.SetNum((Info.CellNum+1) * (Info.CellNum+1) * (Info.CellNum+1));
 	const int PlanetRadius = Manager ? Manager->GetPlanetRadius()
 			: FMath::Max(0, Info.VoxelSize);
+
+	const FPlanetNoiseSettings* NoiseSettings = Manager ? &Manager->GetNoiseSettings() : nullptr;
 	
 	for (int z=0; z < Info.CellNum + 1; z += 1)
 	{
@@ -230,7 +232,7 @@ void UVoxelChunk::GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray
 			for (int x=0; x < Info.CellNum + 1; x += 1)
 			{
 				FVector Pos = FVector(x, y, z) * Info.CellSize - FVector(Info.ChunkSize) * 0.5f + Info.ChunkPos;
-				OutDensityData[VoxelHelper::GetIndex(x,y,z,Info.CellNum)].Density = CalculateDensity(Pos, PlanetRadius);
+				OutDensityData[VoxelHelper::GetIndex(x,y,z,Info.CellNum)].Density = CalculateDensity(Pos, PlanetRadius, NoiseSettings);
 			}
 		}
 	}
@@ -241,12 +243,92 @@ void UVoxelChunk::GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray
 	}
 }
 
-float UVoxelChunk::CalculateDensity(const FVector& Pos, int Radius)
+float UVoxelChunk::CalculateDensity(const FVector& Pos, int Radius, const FPlanetNoiseSettings* NoiseSettings)
 {
-	float Distance = Pos.Size();
-	float Density = Radius - Distance;
-	
-	//float Noise = FMath::PerlinNoise3D(Position * NoiseScale) * 100.0f;
-	return Density;
+	const float Distance = Pos.Size();
+
+	// 기본 구 SDF (노이즈 전)
+	const float BaseDensity = Radius - Distance;
+
+	// 노이즈 없음 / 설정 없음 → 그냥 구
+	if (!NoiseSettings || !NoiseSettings->bEnableNoise || NoiseSettings->Octaves <= 0)
+	{
+		return BaseDensity;
+	}
+
+	// ─────────────────────────────
+	// 1) 표면에서 얼마나 떨어져 있는지 (Signed Distance)
+	//    Distance - Radius : 표면 기준 거리
+	//    > 0 : 표면 밖, < 0 : 표면 안
+	// ─────────────────────────────
+	const float SignedDistFromSurface = Distance - Radius;
+
+	// AffectDepth 범위 안에서만 노이즈가 강하게 적용되도록 Falloff
+	const float AffectDepth = FMath::Max(NoiseSettings->AffectDepth, 1.0f);
+	float Falloff = 1.0f - (FMath::Abs(SignedDistFromSurface) / AffectDepth);
+	Falloff = FMath::Clamp(Falloff, 0.0f, 1.0f);
+
+	// 표면에서 너무 멀면 노이즈 0
+	if (Falloff <= 0.0f)
+	{
+		return BaseDensity;
+	}
+
+	// ─────────────────────────────
+	// 2) Warp 적용 (좌표 뒤틀기)
+	// ─────────────────────────────
+	FVector WarpedPos = Pos;
+	const float BaseFrequency = FMath::Max(NoiseSettings->BaseFrequency, 0.000001f);
+
+	if (NoiseSettings->WarpStrength > 0.0f)
+	{
+		const float WarpFreq = BaseFrequency * FMath::Max(NoiseSettings->WarpFrequencyMultiplier, 0.0f);
+
+		const FVector WarpVector(
+			FMath::PerlinNoise3D(Pos * WarpFreq * 1.37f),
+			FMath::PerlinNoise3D(Pos * WarpFreq * 0.91f),
+			FMath::PerlinNoise3D(Pos * WarpFreq * 1.79f)
+		);
+
+		WarpedPos += WarpVector * NoiseSettings->WarpStrength;
+	}
+
+	// ─────────────────────────────
+	// 3) 옥타브 노이즈 합산
+	// ─────────────────────────────
+	float Frequency = BaseFrequency;
+	float Amplitude = FMath::Max(NoiseSettings->Amplitude, 0.0f);
+	float NoiseValue = 0.0f;
+
+	for (int Octave = 0; Octave < NoiseSettings->Octaves; ++Octave)
+	{
+		const float N = FMath::PerlinNoise3D(WarpedPos * Frequency); // -1 ~ +1
+		NoiseValue += N * Amplitude;
+
+		Frequency *= NoiseSettings->Lacunarity;
+		Amplitude *= NoiseSettings->Gain;
+	}
+
+	// 표면에서 멀어질수록 노이즈 약해지도록 Falloff 적용
+	NoiseValue *= Falloff;
+
+	// ─────────────────────────────
+	// 4) NoiseValue를 안전 범위로 Clamp
+	// ─────────────────────────────
+	const float MaxRaise = FMath::Max(NoiseSettings->MaxRaise, 0.0f);
+	const float MaxDepression = FMath::Max(NoiseSettings->MaxDepression, 0.0f);
+
+	NoiseValue = FMath::Clamp(NoiseValue, -MaxDepression, MaxRaise);
+
+	// (옵션) 살짝 Bias를 줘서 안쪽으로만 조금 더 당기고 싶으면:
+	//NoiseValue -= MaxDepression * 0.2f;
+
+	// ─────────────────────────────
+	// 5) 최종 표면 반지름 & SDF 계산
+	// ─────────────────────────────
+	const float SurfaceRadius = static_cast<float>(Radius) + NoiseValue;
+
+	// SDF: 표면 반지름 - 현재 거리
+	return SurfaceRadius - Distance;
 }
 
