@@ -123,6 +123,16 @@ struct FPlanetNoiseSettings
 	UPROPERTY(EditAnywhere, Category="Noise", meta=(ClampMin=0.0, ClampMax=1.0))
 	float Gain = 0.5f;
 
+	// ─ 거대한 산맥 형태를 위한 리지드 노이즈 ─
+	UPROPERTY(EditAnywhere, Category="Noise|Mountain", meta=(ClampMin=0.0))
+	float MountainAmplitude = 1200.0f;
+
+	UPROPERTY(EditAnywhere, Category="Noise|Mountain", meta=(ClampMin=0.000001))
+	float MountainFrequency = 0.00005f;
+
+	UPROPERTY(EditAnywhere, Category="Noise|Mountain", meta=(ClampMin=0.5f))
+	float MountainSharpness = 2.5f;
+
 	// ─ Warp(좌표 뒤틀기) ─
 	UPROPERTY(EditAnywhere, Category="Noise|Warp", meta=(ClampMin=0.0))
 	float WarpStrength = 30.0f;

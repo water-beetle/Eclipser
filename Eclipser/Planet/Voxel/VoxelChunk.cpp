@@ -221,7 +221,8 @@ void UVoxelChunk::GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray
 {
 	OutDensityData.SetNum((Info.CellNum+1) * (Info.CellNum+1) * (Info.CellNum+1));
 	const int PlanetRadius = Manager ? Manager->GetPlanetRadius()
-			: FMath::Max(0, Info.VoxelSize);
+			: FMath::Max(0, Info.VoxelSize / 2);
+	const int MaxPlanetRadius = FMath::Max(Info.VoxelSize / 2, PlanetRadius);
 
 	const FPlanetNoiseSettings* NoiseSettings = Manager ? &Manager->GetNoiseSettings() : nullptr;
 	
@@ -232,7 +233,7 @@ void UVoxelChunk::GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray
 			for (int x=0; x < Info.CellNum + 1; x += 1)
 			{
 				FVector Pos = FVector(x, y, z) * Info.CellSize - FVector(Info.ChunkSize) * 0.5f + Info.ChunkPos;
-				OutDensityData[VoxelHelper::GetIndex(x,y,z,Info.CellNum)].Density = CalculateDensity(Pos, PlanetRadius, NoiseSettings);
+				OutDensityData[VoxelHelper::GetIndex(x,y,z,Info.CellNum)].Density = CalculateDensity(Pos, PlanetRadius, MaxPlanetRadius, NoiseSettings);
 			}
 		}
 	}
@@ -243,9 +244,10 @@ void UVoxelChunk::GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray
 	}
 }
 
-float UVoxelChunk::CalculateDensity(const FVector& Pos, int Radius, const FPlanetNoiseSettings* NoiseSettings)
+float UVoxelChunk::CalculateDensity(const FVector& Pos, int Radius, int MaxRadius, const FPlanetNoiseSettings* NoiseSettings)
 {
 	const float Distance = Pos.Size();
+	const float ClampedBaseRadius = FMath::Clamp(static_cast<float>(Radius), 0.0f, static_cast<float>(MaxRadius));
 
 	// 기본 구 SDF (노이즈 전)
 	const float BaseDensity = Radius - Distance;
@@ -261,7 +263,7 @@ float UVoxelChunk::CalculateDensity(const FVector& Pos, int Radius, const FPlane
 	//    Distance - Radius : 표면 기준 거리
 	//    > 0 : 표면 밖, < 0 : 표면 안
 	// ─────────────────────────────
-	const float SignedDistFromSurface = Distance - Radius;
+	const float SignedDistFromSurface = Distance - ClampedBaseRadius;
 
 	// AffectDepth 범위 안에서만 노이즈가 강하게 적용되도록 Falloff
 	const float AffectDepth = FMath::Max(NoiseSettings->AffectDepth, 1.0f);
@@ -309,13 +311,29 @@ float UVoxelChunk::CalculateDensity(const FVector& Pos, int Radius, const FPlane
 		Amplitude *= NoiseSettings->Gain;
 	}
 
+	// ─────────────────────────────
+	// 3-1) 거대한 산맥을 위한 리지드 노이즈
+	//      (절댓값 Perlin → Ridge 강조 → 큰 스케일)
+	// ─────────────────────────────
+	if (NoiseSettings->MountainAmplitude > 0.0f)
+	{
+		const float MountainFreq = FMath::Max(NoiseSettings->MountainFrequency, 0.000001f);
+		float Ridge = 1.0f - FMath::Abs(FMath::PerlinNoise3D(WarpedPos * MountainFreq));
+		Ridge = FMath::Pow(FMath::Clamp(Ridge, 0.0f, 1.0f), NoiseSettings->MountainSharpness);
+
+		// 산맥은 표면 쪽으로만 솟도록 양수 기여만 더함
+		NoiseValue += Ridge * NoiseSettings->MountainAmplitude;
+	}
+	
 	// 표면에서 멀어질수록 노이즈 약해지도록 Falloff 적용
 	NoiseValue *= Falloff;
 
 	// ─────────────────────────────
 	// 4) NoiseValue를 안전 범위로 Clamp
 	// ─────────────────────────────
-	const float MaxRaise = FMath::Max(NoiseSettings->MaxRaise, 0.0f);
+	const float MaxRaise = FMath::Min(
+						FMath::Max(NoiseSettings->MaxRaise, 0.0f),
+						FMath::Max(0.0f, static_cast<float>(MaxRadius) - ClampedBaseRadius));
 	const float MaxDepression = FMath::Max(NoiseSettings->MaxDepression, 0.0f);
 
 	NoiseValue = FMath::Clamp(NoiseValue, -MaxDepression, MaxRaise);
@@ -326,7 +344,7 @@ float UVoxelChunk::CalculateDensity(const FVector& Pos, int Radius, const FPlane
 	// ─────────────────────────────
 	// 5) 최종 표면 반지름 & SDF 계산
 	// ─────────────────────────────
-	const float SurfaceRadius = static_cast<float>(Radius) + NoiseValue;
+	const float SurfaceRadius = FMath::Clamp(static_cast<float>(Radius) + NoiseValue, 0.0f, static_cast<float>(MaxRadius));
 
 	// SDF: 표면 반지름 - 현재 거리
 	return SurfaceRadius - Distance;
