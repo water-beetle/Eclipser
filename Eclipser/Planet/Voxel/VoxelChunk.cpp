@@ -246,45 +246,53 @@ void UVoxelChunk::GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray
 
 float UVoxelChunk::CalculateDensity(const FVector& Pos, int Radius, int MaxRadius, const FPlanetNoiseSettings* NoiseSettings)
 {
-	const float Distance = Pos.Size();
-	const float ClampedBaseRadius = FMath::Clamp(static_cast<float>(Radius), 0.0f, static_cast<float>(MaxRadius));
+	const float Distance    = Pos.Size();
+	const float BaseRadius  = FMath::Clamp<float>(Radius, 0, MaxRadius);
+	const float BaseDensity = BaseRadius - Distance;
 
-	// 기본 구 SDF (노이즈 전)
-	const float BaseDensity = Radius - Distance;
-
-	// 노이즈 없음 / 설정 없음 → 그냥 구
+	// 노이즈 꺼져 있으면 그냥 구 SDF
 	if (!NoiseSettings || !NoiseSettings->bEnableNoise || NoiseSettings->Octaves <= 0)
 	{
 		return BaseDensity;
 	}
 
 	// ─────────────────────────────
-	// 1) 표면에서 얼마나 떨어져 있는지 (Signed Distance)
-	//    Distance - Radius : 표면 기준 거리
-	//    > 0 : 표면 밖, < 0 : 표면 안
+	// 1) 표면에서의 거리 & Falloff
 	// ─────────────────────────────
-	const float SignedDistFromSurface = Distance - ClampedBaseRadius;
+	const float SignedDistFromSurface = Distance - BaseRadius;
 
-	// AffectDepth 범위 안에서만 노이즈가 강하게 적용되도록 Falloff
-	const float AffectDepth = FMath::Max(NoiseSettings->AffectDepth, 1.0f);
-	float Falloff = 1.0f - (FMath::Abs(SignedDistFromSurface) / AffectDepth);
-	Falloff = FMath::Clamp(Falloff, 0.0f, 1.0f);
-
-	// 표면에서 너무 멀면 노이즈 0
-	if (Falloff <= 0.0f)
+	const float AffectDepth = NoiseSettings->AffectDepth;
+	// AffectDepth가 0 이하면, 노이즈 적용 범위가 없다고 보고 끝
+	if (AffectDepth <= KINDA_SMALL_NUMBER)
 	{
 		return BaseDensity;
 	}
+
+	float Falloff = 1.0f - FMath::Abs(SignedDistFromSurface) / AffectDepth;
+	if (Falloff <= 0.0f)
+	{
+		// 표면에서 너무 멀면 노이즈 0
+		return BaseDensity;
+	}
+
+	// 표면 부근에서만 0~1로 완만하게 줄이기
+	Falloff = FMath::Clamp(Falloff, 0.0f, 1.0f);
 
 	// ─────────────────────────────
 	// 2) Warp 적용 (좌표 뒤틀기)
 	// ─────────────────────────────
 	FVector WarpedPos = Pos;
-	const float BaseFrequency = FMath::Max(NoiseSettings->BaseFrequency, 0.000001f);
 
-	if (NoiseSettings->WarpStrength > 0.0f)
+	const float BaseFrequency = NoiseSettings->BaseFrequency;
+	// BaseFrequency가 0 이하면 노이즈 자체가 의미가 없으므로 그대로 반환
+	if (BaseFrequency <= 0.0f)
 	{
-		const float WarpFreq = BaseFrequency * FMath::Max(NoiseSettings->WarpFrequencyMultiplier, 0.0f);
+		return BaseDensity;
+	}
+
+	if (NoiseSettings->WarpStrength > 0.0f && NoiseSettings->WarpFrequencyMultiplier > 0.0f)
+	{
+		const float WarpFreq = BaseFrequency * NoiseSettings->WarpFrequencyMultiplier;
 
 		const FVector WarpVector(
 			FMath::PerlinNoise3D(Pos * WarpFreq * 1.37f),
@@ -298,12 +306,17 @@ float UVoxelChunk::CalculateDensity(const FVector& Pos, int Radius, int MaxRadiu
 	// ─────────────────────────────
 	// 3) 옥타브 노이즈 합산
 	// ─────────────────────────────
-	float Frequency = BaseFrequency;
-	float Amplitude = FMath::Max(NoiseSettings->Amplitude, 0.0f);
+	float Frequency  = BaseFrequency;
+	float Amplitude  = NoiseSettings->Amplitude;
 	float NoiseValue = 0.0f;
 
 	for (int Octave = 0; Octave < NoiseSettings->Octaves; ++Octave)
 	{
+		if (Amplitude <= KINDA_SMALL_NUMBER)
+		{
+			break; // Gain 때문에 너무 작아지면 조기 종료
+		}
+
 		const float N = FMath::PerlinNoise3D(WarpedPos * Frequency); // -1 ~ +1
 		NoiseValue += N * Amplitude;
 
@@ -312,41 +325,39 @@ float UVoxelChunk::CalculateDensity(const FVector& Pos, int Radius, int MaxRadiu
 	}
 
 	// ─────────────────────────────
-	// 3-1) 거대한 산맥을 위한 리지드 노이즈
-	//      (절댓값 Perlin → Ridge 강조 → 큰 스케일)
+	// 3-1) 리지드 산맥 노이즈
 	// ─────────────────────────────
-	if (NoiseSettings->MountainAmplitude > 0.0f)
+	if (NoiseSettings->MountainAmplitude > 0.0f && NoiseSettings->MountainFrequency > 0.0f)
 	{
-		const float MountainFreq = FMath::Max(NoiseSettings->MountainFrequency, 0.000001f);
-		float Ridge = 1.0f - FMath::Abs(FMath::PerlinNoise3D(WarpedPos * MountainFreq));
-		Ridge = FMath::Pow(FMath::Clamp(Ridge, 0.0f, 1.0f), NoiseSettings->MountainSharpness);
+		const float MountainFreq = NoiseSettings->MountainFrequency;
 
-		// 산맥은 표면 쪽으로만 솟도록 양수 기여만 더함
+		float Ridge = 1.0f - FMath::Abs(FMath::PerlinNoise3D(WarpedPos * MountainFreq));
+		Ridge      = FMath::Clamp(Ridge, 0.0f, 1.0f); // 이건 한 번만 Clamp
+
+		Ridge = FMath::Pow(Ridge, NoiseSettings->MountainSharpness);
+
+		// 산맥은 밖으로만 튀어나오게 양수 기여
 		NoiseValue += Ridge * NoiseSettings->MountainAmplitude;
 	}
-	
-	// 표면에서 멀어질수록 노이즈 약해지도록 Falloff 적용
+
+	// 표면에서 멀어질수록 노이즈 약해짐
 	NoiseValue *= Falloff;
 
 	// ─────────────────────────────
-	// 4) NoiseValue를 안전 범위로 Clamp
+	// 4) NoiseValue 크기 제한 (Raise/Depression)
 	// ─────────────────────────────
-	const float MaxRaise = FMath::Min(
-						FMath::Max(NoiseSettings->MaxRaise, 0.0f),
-						FMath::Max(0.0f, static_cast<float>(MaxRadius) - ClampedBaseRadius));
-	const float MaxDepression = FMath::Max(NoiseSettings->MaxDepression, 0.0f);
+	// Radius + MaxRaise가 MaxRadius를 넘지 않도록 한 번만 제한
+	const float MaxPossibleRaise = FMath::Max(0.0f, static_cast<float>(MaxRadius) - BaseRadius);
+	const float MaxRaise         = FMath::Min(NoiseSettings->MaxRaise, MaxPossibleRaise);
+	const float MaxDepression    = NoiseSettings->MaxDepression;
 
 	NoiseValue = FMath::Clamp(NoiseValue, -MaxDepression, MaxRaise);
 
-	// (옵션) 살짝 Bias를 줘서 안쪽으로만 조금 더 당기고 싶으면:
-	//NoiseValue -= MaxDepression * 0.2f;
-
 	// ─────────────────────────────
-	// 5) 최종 표면 반지름 & SDF 계산
+	// 5) 최종 반지름 & SDF 계산
 	// ─────────────────────────────
-	const float SurfaceRadius = FMath::Clamp(static_cast<float>(Radius) + NoiseValue, 0.0f, static_cast<float>(MaxRadius));
+	const float SurfaceRadius = FMath::Clamp(BaseRadius + NoiseValue, 0.0f, static_cast<float>(MaxRadius));
 
-	// SDF: 표면 반지름 - 현재 거리
 	return SurfaceRadius - Distance;
 }
 

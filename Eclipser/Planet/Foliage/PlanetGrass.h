@@ -24,10 +24,6 @@ protected:
 	virtual void OnRegister() override;
 	virtual void BeginPlay() override;
 
-#if WITH_EDITOR
-	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
-#endif
-
 private:
 	void GenerateGrassInstances();
 	APlanet* ResolvePlanetActor() const;

@@ -10,6 +10,8 @@ UPlanetGrass::UPlanetGrass()
 	GrassInstances = CreateDefaultSubobject<UHierarchicalInstancedStaticMeshComponent>(TEXT("GrassInstances"));
 	GrassInstances->SetupAttachment(this);
 	GrassInstances->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	GrassInstances->SetGenerateOverlapEvents(false);
+	GrassInstances->SetCanEverAffectNavigation(false);
 	GrassInstances->SetMobility(EComponentMobility::Static);
 }
 
@@ -37,15 +39,6 @@ void UPlanetGrass::RegenerateGrassInstances()
 {
 	GenerateGrassInstances();
 }
-
-#if WITH_EDITOR
-void UPlanetGrass::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
-{
-	Super::PostEditChangeProperty(PropertyChangedEvent);
-
-	GenerateGrassInstances();
-}
-#endif
 
 void UPlanetGrass::GenerateGrassInstances()
 {
