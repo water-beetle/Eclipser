@@ -257,28 +257,6 @@ float UVoxelChunk::CalculateDensity(const FVector& Pos, int Radius, int MaxRadiu
 	}
 
 	// ─────────────────────────────
-	// 1) 표면에서의 거리 & Falloff
-	// ─────────────────────────────
-	const float SignedDistFromSurface = Distance - BaseRadius;
-
-	const float AffectDepth = NoiseSettings->AffectDepth;
-	// AffectDepth가 0 이하면, 노이즈 적용 범위가 없다고 보고 끝
-	if (AffectDepth <= KINDA_SMALL_NUMBER)
-	{
-		return BaseDensity;
-	}
-
-	float Falloff = 1.0f - FMath::Abs(SignedDistFromSurface) / AffectDepth;
-	if (Falloff <= 0.0f)
-	{
-		// 표면에서 너무 멀면 노이즈 0
-		return BaseDensity;
-	}
-
-	// 표면 부근에서만 0~1로 완만하게 줄이기
-	Falloff = FMath::Clamp(Falloff, 0.0f, 1.0f);
-
-	// ─────────────────────────────
 	// 2) Warp 적용 (좌표 뒤틀기)
 	// ─────────────────────────────
 	FVector WarpedPos = Pos;
@@ -339,9 +317,6 @@ float UVoxelChunk::CalculateDensity(const FVector& Pos, int Radius, int MaxRadiu
 		// 산맥은 밖으로만 튀어나오게 양수 기여
 		NoiseValue += Ridge * NoiseSettings->MountainAmplitude;
 	}
-
-	// 표면에서 멀어질수록 노이즈 약해짐
-	NoiseValue *= Falloff;
 
 	// ─────────────────────────────
 	// 4) NoiseValue 크기 제한 (Raise/Depression)

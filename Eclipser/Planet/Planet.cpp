@@ -5,6 +5,7 @@
 
 #include "Gravity/GravityFieldCenter.h"
 #include "Foliage/PlanetGrass.h"
+#include "Voxel/VoxelChunk.h"
 #include "Voxel/VoxelManager.h"
 
 
@@ -38,10 +39,6 @@ void APlanet::OnConstruction(const FTransform& Transform)
 	Super::OnConstruction(Transform);
 
 	UpdatePlanetConfiguration();
-	if (GrassComponent)
-	{
-		GrassComponent->RegenerateGrassInstances();
-	}
 }
 
 // Called every frame
@@ -103,6 +100,81 @@ int32 APlanet::CalculatePlanetDiameter() const
 	const int64 CalculatedDiameter = static_cast<int64>(CellSize) * CellNum * ChunkNum;
 	const int64 ClampedDiameter = FMath::Clamp<int64>(CalculatedDiameter, 0, TNumericLimits<int32>::Max());
 	return static_cast<int32>(ClampedDiameter);
+}
+
+bool APlanet::GetSurfaceLocationAlong(const FVector& InDirection, FVector& OutLocation) const
+{
+	if (!VoxelManager)
+	{
+		return false;
+	}
+
+	FVector Dir = InDirection.GetSafeNormal();
+	if (Dir.IsNearlyZero())
+	{
+		return false;
+	}
+
+	const int32 BaseRadius = PlanetRadius;
+	const FPlanetNoiseSettings& Noise = VoxelManager->GetNoiseSettings();
+    
+	// 노이즈 없으면 그냥 구
+	if (!Noise.bEnableNoise || Noise.Octaves <= 0)
+	{
+		OutLocation = GetActorLocation() + Dir * BaseRadius;
+		return true;
+	}
+
+	// 밀고 파인 깊이 범위를 이용해서 이분 탐색 구간 잡기
+	const float InnerRadius = FMath::Max(0.0f, BaseRadius - Noise.MaxDepression);
+	const float OuterRadius = BaseRadius + Noise.MaxRaise;
+
+	if (InnerRadius >= OuterRadius)
+	{
+		OutLocation = GetActorLocation() + Dir * BaseRadius;
+		return true;
+	}
+
+	const int32   MaxRadius = BaseRadius + Noise.MaxRaise;
+	auto SampleDensity = [&](float R) -> float
+	{
+		const FVector LocalPos = Dir * R; // Planet의 로컬 좌표: Voxel도 Planet 기준으로 생성하니까
+		return UVoxelChunk::CalculateDensity(LocalPos, BaseRadius, MaxRadius, &Noise);
+	};
+
+	float R0 = InnerRadius;
+	float R1 = OuterRadius;
+	float D0 = SampleDensity(R0);
+	float D1 = SampleDensity(R1);
+
+	// 둘 다 안 or 밖이면 실패 (fallback)
+	if ((D0 > 0.f && D1 > 0.f) || (D0 < 0.f && D1 < 0.f))
+	{
+		OutLocation = GetActorLocation() + Dir * BaseRadius;
+		return true;
+	}
+
+	// 이분 탐색
+	for (int i = 0; i < 8; ++i)
+	{
+		const float MidR = 0.5f * (R0 + R1);
+		const float DMid = SampleDensity(MidR);
+
+		if ((D0 > 0.f && DMid > 0.f) || (D0 < 0.f && DMid < 0.f))
+		{
+			R0 = MidR;
+			D0 = DMid;
+		}
+		else
+		{
+			R1 = MidR;
+			D1 = DMid;
+		}
+	}
+
+	const float SurfaceR = 0.5f * (R0 + R1);
+	OutLocation = GetActorLocation() + Dir * SurfaceR;
+	return true;
 }
 
 void APlanet::CacheVoxelSettingsFromManager()

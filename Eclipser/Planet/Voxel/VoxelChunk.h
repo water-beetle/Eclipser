@@ -53,6 +53,7 @@ public:
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
 	                           FActorComponentTickFunction* ThisTickFunction) override;
+	static float CalculateDensity(const FVector& Pos, int Radius, int MaxRadius, const FPlanetNoiseSettings* NoiseSettings);
 
 private:
 	FVoxelData CachedMeshData;
@@ -64,7 +65,6 @@ private:
 	
 	void UpdateMesh(const FVoxelData& VoxelMeshData);
 	static void GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray<FVertexDensity>& OutDensityData, UVoxelManager* Manager);
-	static float CalculateDensity(const FVector& Pos, int Radius, int MaxRadius, const FPlanetNoiseSettings* NoiseSettings);
 
 	UPROPERTY()
 	UVoxelManager* OwningManager = nullptr;

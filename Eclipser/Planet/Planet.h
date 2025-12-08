@@ -52,6 +52,9 @@ public:
 
 	UPROPERTY(EditAnywhere, Category="PlanetComponent")
 	TObjectPtr<UPlanetGrass> GrassComponent;
+
+	bool  GetSurfaceLocationAlong(const FVector& InDirection, FVector& OutLocation) const;
+	
 private:
 	void UpdatePlanetConfiguration();
 	bool HasValidVoxelConfiguration() const;

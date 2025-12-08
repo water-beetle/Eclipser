@@ -21,7 +21,6 @@ public:
 	void RegenerateGrassInstances();
 
 protected:
-	virtual void OnRegister() override;
 	virtual void BeginPlay() override;
 
 private:
@@ -56,6 +55,9 @@ private:
 	UPROPERTY(EditAnywhere, Category="Grass", meta = (ClampMin = "0.0"))
 	float MaxUniformScale = 1.1f;
 
+	UPROPERTY(EditAnywhere, Category="Grass|Slope", meta=(ClampMin=0.0f, ClampMax=90.0f))
+	float MaxSlopeAngleDeg = 50.0f; // 이 각도보다 가파르면 풀 안 깔기
+	
 	UPROPERTY(EditAnywhere, Category="Grass")
 	bool bRegenerateOnRegister = true;
 };

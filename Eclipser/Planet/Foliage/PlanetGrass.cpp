@@ -15,24 +15,12 @@ UPlanetGrass::UPlanetGrass()
 	GrassInstances->SetMobility(EComponentMobility::Static);
 }
 
-void UPlanetGrass::OnRegister()
-{
-	Super::OnRegister();
-
-	if (bRegenerateOnRegister)
-	{
-		GenerateGrassInstances();
-	}
-}
-
 void UPlanetGrass::BeginPlay()
 {
 	Super::BeginPlay();
+	
+	GenerateGrassInstances();
 
-	if (!bRegenerateOnRegister)
-	{
-		GenerateGrassInstances();
-	}
 }
 
 void UPlanetGrass::RegenerateGrassInstances()
@@ -43,56 +31,57 @@ void UPlanetGrass::RegenerateGrassInstances()
 void UPlanetGrass::GenerateGrassInstances()
 {
 	if (!GrassInstances || !GrassInstances->GetStaticMesh())
-	{
-		return;
-	}
+        return;
 
-	APlanet* PlanetActor = ResolvePlanetActor();
-	const float PlanetRadius = ResolvePlanetRadius(PlanetActor);
-	if (PlanetRadius <= KINDA_SMALL_NUMBER)
-	{
-		return;
-	}
+    APlanet* PlanetActor = ResolvePlanetActor();
+    const float PlanetRadius = ResolvePlanetRadius(PlanetActor); // BaseRadius
+    if (PlanetRadius <= KINDA_SMALL_NUMBER || !PlanetActor)
+        return;
 
-	const FVector PlanetCenter = ResolvePlanetCenter(PlanetActor);
-	const int32 DesiredInstanceCount = FMath::Max(0, InstanceCount);
-	const int32 DesiredClusterCount = FMath::Max(1, ClusterCount);
-	const float ClampedSpread = FMath::Max(0.0f, ClusterSpread);
+    const FVector PlanetCenter = ResolvePlanetCenter(PlanetActor);
+    const int32 DesiredInstanceCount = FMath::Max(0, InstanceCount);
+    const int32 DesiredClusterCount  = FMath::Max(1, ClusterCount);
+    const float ClampedSpread        = FMath::Max(0.0f, ClusterSpread);
 
-	GrassInstances->ClearInstances();
+    GrassInstances->ClearInstances();
 
-	const int32 BaseClusterSize = DesiredInstanceCount / DesiredClusterCount;
-	int32 Remainder = DesiredInstanceCount % DesiredClusterCount;
+    const int32 BaseClusterSize = DesiredInstanceCount / DesiredClusterCount;
+    int32 Remainder = DesiredInstanceCount % DesiredClusterCount;
 
-	for (int32 ClusterIndex = 0; ClusterIndex < DesiredClusterCount; ++ClusterIndex)
-	{
-		const int32 InstancesInCluster = BaseClusterSize + (Remainder-- > 0 ? 1 : 0);
-		if (InstancesInCluster <= 0)
-		{
-			continue;
-		}
+    for (int32 ClusterIndex = 0; ClusterIndex < DesiredClusterCount; ++ClusterIndex)
+    {
+        const int32 InstancesInCluster = BaseClusterSize + (Remainder-- > 0 ? 1 : 0);
+        if (InstancesInCluster <= 0)
+            continue;
 
-		const FVector ClusterDirection = FMath::VRand().GetSafeNormal();
+        const FVector ClusterDirection = FMath::VRand().GetSafeNormal();
 
-		for (int32 InstanceIndex = 0; InstanceIndex < InstancesInCluster; ++InstanceIndex)
-		{
-			FVector Direction = (ClusterDirection + (ClampedSpread * FMath::VRand())).GetSafeNormal();
-			if (Direction.IsNearlyZero())
-			{
-				Direction = ClusterDirection;
-			}
+        for (int32 InstanceIndex = 0; InstanceIndex < InstancesInCluster; ++InstanceIndex)
+        {
+            FVector Direction = (ClusterDirection + (ClampedSpread * FMath::VRand())).GetSafeNormal();
+            if (Direction.IsNearlyZero())
+                Direction = ClusterDirection;
 
-			const FVector Normal = Direction.GetSafeNormal();
-			const FVector Location = PlanetCenter + Normal * (PlanetRadius + SurfaceOffset);
-			const FQuat Alignment = FRotationMatrix::MakeFromZ(Normal).ToQuat();
-			const FQuat RandomTwist = FQuat(Normal, FMath::FRandRange(0.0f, TWO_PI));
-			FTransform InstanceTransform(RandomTwist * Alignment);
-			InstanceTransform.SetLocation(Location);
-			InstanceTransform.SetScale3D(FVector(CalculateRandomScale()));
+            FVector SurfaceLocation;
+            if (!PlanetActor->GetSurfaceLocationAlong(Direction, SurfaceLocation))
+            {
+                // 실패하면 그냥 BaseRadius 기준으로
+                SurfaceLocation = PlanetCenter + Direction * (PlanetRadius);
+            }
 
-			GrassInstances->AddInstanceWorldSpace(InstanceTransform);
-		}
-	}
+            const FVector Normal = (SurfaceLocation - PlanetCenter).GetSafeNormal();
+            const FVector Location = SurfaceLocation + Normal * SurfaceOffset;
+
+            const FQuat Alignment   = FRotationMatrix::MakeFromZ(Normal).ToQuat();
+            const FQuat RandomTwist = FQuat(Normal, FMath::FRandRange(0.0f, TWO_PI));
+
+            FTransform InstanceTransform(RandomTwist * Alignment);
+            InstanceTransform.SetLocation(Location);
+            InstanceTransform.SetScale3D(FVector(CalculateRandomScale()));
+
+            GrassInstances->AddInstanceWorldSpace(InstanceTransform);
+        }
+    }
 }
 
 APlanet* UPlanetGrass::ResolvePlanetActor() const

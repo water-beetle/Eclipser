@@ -140,11 +140,6 @@ struct FPlanetNoiseSettings
 	UPROPERTY(EditAnywhere, Category="Noise|Warp", meta=(ClampMin=0.0))
 	float WarpFrequencyMultiplier = 2.0f;
 
-	// ─ 안전장치: 노이즈 영향 범위 & 크기 제한 ─
-	// Radius 기준으로 "표면 위/아래" 얼마나 깊이까지 노이즈를 줄지
-	UPROPERTY(EditAnywhere, Category="Noise|Safety", meta=(ClampMin=1.0))
-	float AffectDepth = 800.0f;   // 표면 ±800 범위까지만 노이즈 적용
-
 	// 반지름 기준, 최대 산 높이 / 최대 파이는 깊이
 	UPROPERTY(EditAnywhere, Category="Noise|Safety", meta=(ClampMin=0.0))
 	float MaxRaise = 800.0f;      // Radius보다 최대 얼마나 더 튀어나갈 수 있는지
