@@ -41,6 +41,20 @@ UPlanetFoliage::UPlanetFoliage()
 	RockConfig.bAffectNavigation = true;
 }
 
+void UPlanetFoliage::RemoveInstancesWithinRadius(const FVector& WorldCenter, float Radius)
+{
+	const float SafeRadius = FMath::Max(0.0f, Radius);
+	if (SafeRadius <= KINDA_SMALL_NUMBER)
+	{
+		return;
+	}
+
+	RemoveInstancesFromComponent(GrassInstances, WorldCenter, SafeRadius);
+	RemoveInstancesFromComponent(FlowerInstances, WorldCenter, SafeRadius);
+	RemoveInstancesFromComponent(TreeInstances, WorldCenter, SafeRadius);
+	RemoveInstancesFromComponent(RockInstances, WorldCenter, SafeRadius);
+}
+
 void UPlanetFoliage::BeginPlay()
 {
 	Super::BeginPlay();
@@ -54,6 +68,33 @@ void UPlanetFoliage::GenerateFoliageInstances()
 	GenerateInstancesForLayer(Flowerconfig, FlowerInstances);
 	GenerateInstancesForLayer(TreeConfig, TreeInstances);
 	GenerateInstancesForLayer(RockConfig, RockInstances);
+}
+
+void UPlanetFoliage::RemoveInstancesFromComponent(UHierarchicalInstancedStaticMeshComponent* Instances,
+	const FVector& WorldCenter, float Radius) const
+{
+	if (!Instances)
+	{
+		return;
+	}
+
+	const float RadiusSquared = Radius * Radius;
+	const int32 InstanceCount = Instances->GetInstanceCount();
+
+	for (int32 Index = InstanceCount - 1; Index >= 0; --Index)
+	{
+		FTransform InstanceTransform;
+		if (!Instances->GetInstanceTransform(Index, InstanceTransform, true))
+		{
+			continue;
+		}
+
+		const float DistanceSquared = FVector::DistSquared(InstanceTransform.GetLocation(), WorldCenter);
+		if (DistanceSquared <= RadiusSquared)
+		{
+			Instances->RemoveInstance(Index);
+		}
+	}
 }
 
 void UPlanetFoliage::GenerateInstancesForLayer(const FFoliageLayerConfig& Config,

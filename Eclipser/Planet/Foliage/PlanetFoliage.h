@@ -50,11 +50,14 @@ class ECLIPSER_API UPlanetFoliage : public USceneComponent
 public:
 	UPlanetFoliage();
 
+	void RemoveInstancesWithinRadius(const FVector& WorldCenter, float Radius);
 protected:
 	virtual void BeginPlay() override;
 
 private:
 	void GenerateFoliageInstances();
+	void RemoveInstancesFromComponent(UHierarchicalInstancedStaticMeshComponent* Instances, const FVector& WorldCenter,
+										  float Radius) const;
 	void GenerateInstancesForLayer(const FFoliageLayerConfig& Config, UHierarchicalInstancedStaticMeshComponent* Instances);
 	void ConfigureInstanceComponent(const FFoliageLayerConfig& Config, UHierarchicalInstancedStaticMeshComponent* Instances) const;
 	APlanet* ResolvePlanetActor() const;

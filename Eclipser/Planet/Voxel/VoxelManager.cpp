@@ -1,6 +1,8 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "VoxelManager.h"
+#include "Planet/Foliage/PlanetFoliage.h"
+#include "Planet/Planet.h"
 #include "Planet/Voxel/VoxelChunk.h"
 #include "Defines/VoxelStructs.h"
 #include "etc/VoxelHelper.h"
@@ -138,6 +140,14 @@ void UVoxelManager::Sculpt(const FVector& ImpactPoint, float Radius)
 	if (ChunkNum <= 0 || CellNum <= 0 || CellSize <= 0)
 		return;
 
+	if (APlanet* Planet = Cast<APlanet>(GetOwner()))
+	{
+		if (Planet->FoliageComponent)
+		{
+			Planet->FoliageComponent->RemoveInstancesWithinRadius(ImpactPoint, Radius);
+		}
+	}
+	
 	const int ChunkSize = CellSize * CellNum;
 	const float VoxelSize = ChunkSize * ChunkNum;
 	const FVector VoxelMinCorner = GetComponentLocation() - FVector(VoxelSize) * 0.5f;
