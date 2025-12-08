@@ -7,7 +7,7 @@
 
 class UGravityField;
 class UVoxelManager;
-class UPlanetGrass;
+class UPlanetFoliage;
 
 UCLASS()
 class ECLIPSER_API APlanet : public AActor
@@ -51,7 +51,7 @@ public:
 	TObjectPtr<UGravityField> GravityField;
 
 	UPROPERTY(EditAnywhere, Category="PlanetComponent")
-	TObjectPtr<UPlanetGrass> GrassComponent;
+	TObjectPtr<UPlanetFoliage> FoliageComponent;
 
 	bool  GetSurfaceLocationAlong(const FVector& InDirection, FVector& OutLocation) const;
 	

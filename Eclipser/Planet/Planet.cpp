@@ -4,7 +4,7 @@
 #include "Planet.h"
 
 #include "Gravity/GravityFieldCenter.h"
-#include "Foliage/PlanetGrass.h"
+#include "Foliage/PlanetFoliage.h"
 #include "Voxel/VoxelChunk.h"
 #include "Voxel/VoxelManager.h"
 
@@ -22,8 +22,8 @@ APlanet::APlanet()
 	VoxelManager->SetupAttachment(PlanetRoot);
 	GravityField = CreateDefaultSubobject<UGravityFieldCenter>("GravityField");
 	GravityField->SetupAttachment(PlanetRoot);
-	GrassComponent = CreateDefaultSubobject<UPlanetGrass>(TEXT("PlanetGrass"));
-	GrassComponent->SetupAttachment(PlanetRoot);
+	FoliageComponent = CreateDefaultSubobject<UPlanetFoliage>(TEXT("PlanetFoliage"));
+	FoliageComponent->SetupAttachment(PlanetRoot);
 }
 
 // Called when the game starts or when spawned
