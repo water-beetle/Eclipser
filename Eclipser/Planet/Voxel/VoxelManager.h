@@ -55,7 +55,8 @@ public:
 	int32 GetCellNum() const { return CellNum; }
 	int32 GetChunkNum() const { return ChunkNum; }
 	const FPlanetNoiseSettings& GetNoiseSettings() const { return NoiseSettings; }
-	
+
+	void RequestChunkRebuild(UVoxelChunk* Chunk);
 private:
 	UPROPERTY()
 	TMap<FIntVector, UVoxelChunk*> ChunkMap;

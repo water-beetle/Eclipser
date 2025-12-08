@@ -78,23 +78,14 @@ void UPlanetFoliage::RemoveInstancesFromComponent(UHierarchicalInstancedStaticMe
 		return;
 	}
 
-	const float RadiusSquared = Radius * Radius;
-	const int32 InstanceCount = Instances->GetInstanceCount();
+	TArray<int32> InstanceIndices = Instances->GetInstancesOverlappingSphere(WorldCenter, Radius, true);
 
-	for (int32 Index = InstanceCount - 1; Index >= 0; --Index)
+	if (InstanceIndices.IsEmpty())
 	{
-		FTransform InstanceTransform;
-		if (!Instances->GetInstanceTransform(Index, InstanceTransform, true))
-		{
-			continue;
-		}
-
-		const float DistanceSquared = FVector::DistSquared(InstanceTransform.GetLocation(), WorldCenter);
-		if (DistanceSquared <= RadiusSquared)
-		{
-			Instances->RemoveInstance(Index);
-		}
+		return;
 	}
+
+	Instances->RemoveInstances(InstanceIndices);
 }
 
 void UPlanetFoliage::GenerateInstancesForLayer(const FFoliageLayerConfig& Config,

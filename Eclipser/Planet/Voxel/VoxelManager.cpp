@@ -305,6 +305,18 @@ void UVoxelManager::SetVoxelSettings(int32 InCellSize, int32 InCellNum, int32 In
 	ChunkNum = InChunkNum;
 }
 
+void UVoxelManager::RequestChunkRebuild(UVoxelChunk* Chunk)
+{
+	if (!IsValid(Chunk))
+	{
+		return;
+	}
+
+	const int32 LODLevel = FMath::Max(1, Chunk->GetRequestedLODLevel());
+	const FChunkSettingInfo ChunkInfo = Chunk->MakeChunkSettingInfoForLOD(LODLevel);
+	EnqueueGenerateChunk(Chunk, ChunkInfo);
+}
+
 
 void UVoxelManager::EnqueueGenerateChunk(UVoxelChunk* Chunk, const FChunkSettingInfo& ChunkInfo)
 {

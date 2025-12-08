@@ -102,7 +102,8 @@ void UVoxelChunk::Sculpt(const FVector& ImpactPoint, float Radius)
 
         const FVector SphereCenter(ImpactPoint);
         const float RadiusSquared = Radius * Radius;
-
+		bool bModified = false;
+	
         for (int32 z = StartZ; z <= EndZ; ++z)
         {
                 for (int32 y = StartY; y <= EndY; ++y)
@@ -125,6 +126,7 @@ void UVoxelChunk::Sculpt(const FVector& ImpactPoint, float Radius)
                         			CurrentDensity = NewDensity;
                         			if (OwningManager)
                         			{
+                        				bModified = true;
                         				OwningManager->RecordSculptedDensity(ChunkInfo, x, y, z, CurrentDensity);
                         			}
                         		}
@@ -132,8 +134,20 @@ void UVoxelChunk::Sculpt(const FVector& ImpactPoint, float Radius)
                 }
         }
 
-        CachedMeshData = MarchingCubeMeshGenerator::GenerateChunkMesh(ChunkInfo, ChunkDensityData);
-        UpdateMesh(CachedMeshData);
+	if (!bModified)
+	{
+		return;
+	}
+
+	if (OwningManager)
+	{
+		OwningManager->RequestChunkRebuild(this);
+	}
+	else
+	{
+		CachedMeshData = MarchingCubeMeshGenerator::GenerateChunkMesh(ChunkInfo, ChunkDensityData);
+		UpdateMesh(CachedMeshData);
+	}
 }
 
 // Called when the game starts
