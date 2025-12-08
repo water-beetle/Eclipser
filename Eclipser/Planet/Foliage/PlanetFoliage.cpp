@@ -11,6 +11,9 @@ UPlanetFoliage::UPlanetFoliage()
 	GrassInstances = CreateDefaultSubobject<UHierarchicalInstancedStaticMeshComponent>(TEXT("GrassInstances"));
 	GrassInstances->SetupAttachment(this);
 
+	FlowerInstances = CreateDefaultSubobject<UHierarchicalInstancedStaticMeshComponent>(TEXT("FlowerInstances"));
+	FlowerInstances->SetupAttachment(this);
+	
 	TreeInstances = CreateDefaultSubobject<UHierarchicalInstancedStaticMeshComponent>(TEXT("TreeInstances"));
 	TreeInstances->SetupAttachment(this);
 
@@ -20,6 +23,9 @@ UPlanetFoliage::UPlanetFoliage()
 	GrassConfig.bEnableCollision = false;
 	GrassConfig.bAffectNavigation = false;
 
+	Flowerconfig.bEnableCollision = false;
+	Flowerconfig.bAffectNavigation = false;
+	
 	TreeConfig.InstanceCount = 2000;
 	TreeConfig.ClusterCount = 150;
 	TreeConfig.MinUniformScale = 0.8f;
@@ -45,6 +51,7 @@ void UPlanetFoliage::BeginPlay()
 void UPlanetFoliage::GenerateFoliageInstances()
 {
 	GenerateInstancesForLayer(GrassConfig, GrassInstances);
+	GenerateInstancesForLayer(Flowerconfig, FlowerInstances);
 	GenerateInstancesForLayer(TreeConfig, TreeInstances);
 	GenerateInstancesForLayer(RockConfig, RockInstances);
 }

@@ -26,7 +26,7 @@ struct FFoliageLayerConfig
 	UPROPERTY(EditAnywhere, Category="Foliage", meta = (ClampMin = "0.0"))
 	float ClusterSpread = 0.04f;
 
-	UPROPERTY(EditAnywhere, Category="Foliage", meta = (ClampMin = "0.0"))
+	UPROPERTY(EditAnywhere, Category="Foliage", meta = (ClampMin = "-10.0"))
 	float SurfaceOffset = 0.0f;
 
 	UPROPERTY(EditAnywhere, Category="Foliage", meta = (ClampMin = "0.0"))
@@ -67,6 +67,9 @@ private:
 	TObjectPtr<UHierarchicalInstancedStaticMeshComponent> GrassInstances;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Foliage", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UHierarchicalInstancedStaticMeshComponent> FlowerInstances;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Foliage", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UHierarchicalInstancedStaticMeshComponent> TreeInstances;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Foliage", meta = (AllowPrivateAccess = "true"))
@@ -77,6 +80,9 @@ private:
 
 	UPROPERTY(EditAnywhere, Category="Foliage", meta=(AllowPrivateAccess="true"))
 	FFoliageLayerConfig GrassConfig;
+
+	UPROPERTY(EditAnywhere, Category="Foliage", meta=(AllowPrivateAccess="true"))
+	FFoliageLayerConfig Flowerconfig;
 
 	UPROPERTY(EditAnywhere, Category="Foliage", meta=(AllowPrivateAccess="true"))
 	FFoliageLayerConfig TreeConfig;
