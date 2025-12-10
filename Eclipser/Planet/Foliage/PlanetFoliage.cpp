@@ -205,6 +205,7 @@ void UPlanetFoliage::GenerateInstancesForLayer(const FFoliageLayerConfig& Config
 
 	const FVector SafeChunkCenter = ChunkRelativeCenter;
 	const float SafeHalfSize = FMath::Max(0.0f, ChunkHalfSize);
+	const FVector ChunkCenterWorld = PlanetCenter + SafeChunkCenter;
 
 	const int32 DesiredInstanceCount = TotalChunkCount > 0
 												   ? FMath::CeilToInt(static_cast<float>(Config.InstanceCount) / TotalChunkCount)
@@ -242,9 +243,9 @@ void UPlanetFoliage::GenerateInstancesForLayer(const FFoliageLayerConfig& Config
 				Direction = ClusterDirection;
 
 			FVector SurfaceLocation;
-			if (!PlanetActor->GetSurfaceLocationAlong(Direction, SurfaceLocation))
+			if (!PlanetActor->GetSurfaceLocationAlong(Direction, SurfaceLocation, &ChunkCenterWorld, SafeHalfSize))
 			{
-				SurfaceLocation = PlanetCenter + Direction * (PlanetRadius);
+				continue;
 			}
 
 			const FVector Normal = (SurfaceLocation - PlanetCenter).GetSafeNormal();

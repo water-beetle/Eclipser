@@ -102,7 +102,8 @@ int32 APlanet::CalculatePlanetDiameter() const
 	return static_cast<int32>(ClampedDiameter);
 }
 
-bool APlanet::GetSurfaceLocationAlong(const FVector& InDirection, FVector& OutLocation) const
+bool APlanet::GetSurfaceLocationAlong(const FVector& InDirection, FVector& OutLocation,
+		const FVector* ChunkCenter, float ChunkHalfSize) const
 {
 	if (!VoxelManager)
 	{
@@ -174,6 +175,19 @@ bool APlanet::GetSurfaceLocationAlong(const FVector& InDirection, FVector& OutLo
 
 	const float SurfaceR = 0.5f * (R0 + R1);
 	OutLocation = GetActorLocation() + Dir * SurfaceR;
+
+	if (ChunkCenter && ChunkHalfSize > KINDA_SMALL_NUMBER)
+	{
+		const FVector HalfExtent(ChunkHalfSize);
+		const FBox ChunkBounds(*ChunkCenter - HalfExtent, *ChunkCenter + HalfExtent);
+
+		if (!ChunkBounds.IsInside(OutLocation))
+		{
+			return false;
+		}
+	}
+
+	
 	return true;
 }
 
