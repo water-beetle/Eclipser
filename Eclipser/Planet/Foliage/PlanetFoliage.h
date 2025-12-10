@@ -8,6 +8,7 @@
 
 class APlanet;
 class UHierarchicalInstancedStaticMeshComponent;
+class UVoxelManager;
 
 USTRUCT(BlueprintType)
 struct FFoliageLayerConfig
@@ -42,6 +43,23 @@ struct FFoliageLayerConfig
 	bool bAffectNavigation = false;
 };
 
+USTRUCT()
+struct FChunkFoliageComponents
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FVector ChunkCenterWorld;
+	UPROPERTY()
+	TObjectPtr<UHierarchicalInstancedStaticMeshComponent> Grass;
+	UPROPERTY()
+	TObjectPtr<UHierarchicalInstancedStaticMeshComponent> Flower;
+	UPROPERTY()
+	TObjectPtr<UHierarchicalInstancedStaticMeshComponent> Tree;
+	UPROPERTY()
+	TObjectPtr<UHierarchicalInstancedStaticMeshComponent> Rock;
+};
+
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class ECLIPSER_API UPlanetFoliage : public USceneComponent
 {
@@ -58,13 +76,21 @@ private:
 	void GenerateFoliageInstances();
 	void RemoveInstancesFromComponent(UHierarchicalInstancedStaticMeshComponent* Instances, const FVector& WorldCenter,
 										  float Radius) const;
-	void GenerateInstancesForLayer(const FFoliageLayerConfig& Config, UHierarchicalInstancedStaticMeshComponent* Instances);
+	void GenerateInstancesForLayer(const FFoliageLayerConfig& Config, UHierarchicalInstancedStaticMeshComponent* Instances,
+									   const FVector& ChunkRelativeCenter, float ChunkHalfSize, int32 TotalChunkCount,
+									   const FVector& PlanetCenter, float PlanetRadius, APlanet* PlanetActor);
 	void ConfigureInstanceComponent(const FFoliageLayerConfig& Config, UHierarchicalInstancedStaticMeshComponent* Instances) const;
 	APlanet* ResolvePlanetActor() const;
+	const UVoxelManager* ResolveVoxelManager() const;
+	int32 ResolveChunkNum(const APlanet* PlanetActor, const UVoxelManager* VoxelManager) const;
+	int32 ResolveCellSize(const APlanet* PlanetActor, const UVoxelManager* VoxelManager) const;
+	int32 ResolveCellNum(const APlanet* PlanetActor, const UVoxelManager* VoxelManager) const;
 	float ResolvePlanetRadius(const APlanet* PlanetActor) const;
 	FVector ResolvePlanetCenter(const APlanet* PlanetActor) const;
 	float CalculateRandomScale(const FFoliageLayerConfig& Config) const;
-
+	
+	void ClearChunkFoliage();
+	UHierarchicalInstancedStaticMeshComponent* CreateChunkComponent(const FString& BaseName);
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Foliage", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UHierarchicalInstancedStaticMeshComponent> GrassInstances;
@@ -93,6 +119,11 @@ private:
 	UPROPERTY(EditAnywhere, Category="Foliage", meta=(AllowPrivateAccess="true"))
 	FFoliageLayerConfig RockConfig;
 
-	UPROPERTY(EditAnywhere, Category="Foliage")
-	bool bRegenerateOnRegister = true;
+	UPROPERTY(Transient)
+	TMap<FIntVector, FChunkFoliageComponents> ChunkFoliageMap;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UHierarchicalInstancedStaticMeshComponent>> SpawnedChunkComponents;
+
+	float CachedChunkHalfSize = 0.0f;
 };

@@ -3,6 +3,7 @@
 #include "../Planet.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Engine/CollisionProfile.h"
+#include "Planet/Voxel/VoxelManager.h"
 
 UPlanetFoliage::UPlanetFoliage()
 {
@@ -49,10 +50,37 @@ void UPlanetFoliage::RemoveInstancesWithinRadius(const FVector& WorldCenter, flo
 		return;
 	}
 
-	RemoveInstancesFromComponent(GrassInstances, WorldCenter, SafeRadius);
-	RemoveInstancesFromComponent(FlowerInstances, WorldCenter, SafeRadius);
-	RemoveInstancesFromComponent(TreeInstances, WorldCenter, SafeRadius);
-	RemoveInstancesFromComponent(RockInstances, WorldCenter, SafeRadius);
+	const float ChunkRadius = CachedChunkHalfSize > 0.0f
+								  ? CachedChunkHalfSize * FMath::Sqrt(3.0f)
+								  : 0.0f;
+
+	if (ChunkFoliageMap.Num() == 0 || ChunkRadius <= KINDA_SMALL_NUMBER)
+	{
+		RemoveInstancesFromComponent(GrassInstances, WorldCenter, SafeRadius);
+		RemoveInstancesFromComponent(FlowerInstances, WorldCenter, SafeRadius);
+		RemoveInstancesFromComponent(TreeInstances, WorldCenter, SafeRadius);
+		RemoveInstancesFromComponent(RockInstances, WorldCenter, SafeRadius);
+		return;
+	}
+
+	// 최대 범위 안에 포함되는 Chunk에서만 Foliage 삭제
+	for (const auto& Pair : ChunkFoliageMap)
+	{
+		const FVector ChunkCenter = Pair.Value.ChunkCenterWorld;
+		if (ChunkRadius > 0.0f)
+		{
+			const float DistanceToChunk = FVector::Dist(ChunkCenter, WorldCenter);
+			if (DistanceToChunk > SafeRadius + ChunkRadius)
+			{
+				continue;
+			}
+		}
+
+		RemoveInstancesFromComponent(Pair.Value.Grass, WorldCenter, SafeRadius);
+		RemoveInstancesFromComponent(Pair.Value.Flower, WorldCenter, SafeRadius);
+		RemoveInstancesFromComponent(Pair.Value.Tree, WorldCenter, SafeRadius);
+		RemoveInstancesFromComponent(Pair.Value.Rock, WorldCenter, SafeRadius);
+	}
 }
 
 void UPlanetFoliage::BeginPlay()
@@ -64,10 +92,74 @@ void UPlanetFoliage::BeginPlay()
 
 void UPlanetFoliage::GenerateFoliageInstances()
 {
-	GenerateInstancesForLayer(GrassConfig, GrassInstances);
-	GenerateInstancesForLayer(Flowerconfig, FlowerInstances);
-	GenerateInstancesForLayer(TreeConfig, TreeInstances);
-	GenerateInstancesForLayer(RockConfig, RockInstances);
+	ClearChunkFoliage();
+
+	APlanet* PlanetActor = ResolvePlanetActor();
+	const UVoxelManager* VoxelManager = ResolveVoxelManager();
+
+	const float PlanetRadius = ResolvePlanetRadius(PlanetActor);
+	if (PlanetRadius <= KINDA_SMALL_NUMBER || !PlanetActor)
+	{
+		return;
+	}
+
+	const FVector PlanetCenter = ResolvePlanetCenter(PlanetActor);
+	const int32 ChunkNum = ResolveChunkNum(PlanetActor, VoxelManager);
+	const int32 CellSize = ResolveCellSize(PlanetActor, VoxelManager);
+	const int32 CellNum = ResolveCellNum(PlanetActor, VoxelManager);
+
+	const int32 ChunkSize = CellSize * CellNum;
+	CachedChunkHalfSize = static_cast<float>(ChunkSize) * 0.5f;
+
+	const int32 TotalChunkCount = FMath::Max(1, ChunkNum * ChunkNum * ChunkNum);
+
+	for (int32 X = 0; X < ChunkNum; ++X)
+	{
+		for (int32 Y = 0; Y < ChunkNum; ++Y)
+		{
+			for (int32 Z = 0; Z < ChunkNum; ++Z)
+			{
+				const FIntVector ChunkIndex(X, Y, Z);
+				const FVector ChunkRelativeCenter = (FVector(ChunkIndex) + 0.5f) * ChunkSize -
+					FVector(ChunkSize * ChunkNum * 0.5f);
+
+				FChunkFoliageComponents Entry;
+				Entry.Grass = CreateChunkComponent(TEXT("GrassInstances"));
+				Entry.Flower = CreateChunkComponent(TEXT("FlowerInstances"));
+				Entry.Tree = CreateChunkComponent(TEXT("TreeInstances"));
+				Entry.Rock = CreateChunkComponent(TEXT("RockInstances"));
+
+				if (Entry.Grass)
+				{
+					Entry.Grass->SetRelativeLocation(ChunkRelativeCenter);
+				}
+				if (Entry.Flower)
+				{
+					Entry.Flower->SetRelativeLocation(ChunkRelativeCenter);
+				}
+				if (Entry.Tree)
+				{
+					Entry.Tree->SetRelativeLocation(ChunkRelativeCenter);
+				}
+				if (Entry.Rock)
+				{
+					Entry.Rock->SetRelativeLocation(ChunkRelativeCenter);
+				}
+
+				GenerateInstancesForLayer(GrassConfig, Entry.Grass, ChunkRelativeCenter, CachedChunkHalfSize,
+				                          TotalChunkCount, PlanetCenter, PlanetRadius, PlanetActor);
+				GenerateInstancesForLayer(Flowerconfig, Entry.Flower, ChunkRelativeCenter, CachedChunkHalfSize,
+				                          TotalChunkCount, PlanetCenter, PlanetRadius, PlanetActor);
+				GenerateInstancesForLayer(TreeConfig, Entry.Tree, ChunkRelativeCenter, CachedChunkHalfSize,
+				                          TotalChunkCount, PlanetCenter, PlanetRadius, PlanetActor);
+				GenerateInstancesForLayer(RockConfig, Entry.Rock, ChunkRelativeCenter, CachedChunkHalfSize,
+				                          TotalChunkCount, PlanetCenter, PlanetRadius, PlanetActor);
+
+				Entry.ChunkCenterWorld = PlanetCenter + ChunkRelativeCenter;
+				ChunkFoliageMap.Add(ChunkIndex, Entry);
+			}
+		}
+	}
 }
 
 void UPlanetFoliage::RemoveInstancesFromComponent(UHierarchicalInstancedStaticMeshComponent* Instances,
@@ -89,7 +181,8 @@ void UPlanetFoliage::RemoveInstancesFromComponent(UHierarchicalInstancedStaticMe
 }
 
 void UPlanetFoliage::GenerateInstancesForLayer(const FFoliageLayerConfig& Config,
-                                               UHierarchicalInstancedStaticMeshComponent* Instances)
+	UHierarchicalInstancedStaticMeshComponent* Instances, const FVector& ChunkRelativeCenter, float ChunkHalfSize,
+	int32 TotalChunkCount, const FVector& PlanetCenter, float PlanetRadius, APlanet* PlanetActor)
 {
 	if (!Instances)
 	{
@@ -104,17 +197,22 @@ void UPlanetFoliage::GenerateInstancesForLayer(const FFoliageLayerConfig& Config
 		return;
 	}
 
-	APlanet* PlanetActor = ResolvePlanetActor();
-	const float PlanetRadius = ResolvePlanetRadius(PlanetActor);
 	if (PlanetRadius <= KINDA_SMALL_NUMBER || !PlanetActor)
 	{
 		Instances->ClearInstances();
 		return;
 	}
 
-	const FVector PlanetCenter = ResolvePlanetCenter(PlanetActor);
-	const int32 DesiredInstanceCount = FMath::Max(0, Config.InstanceCount);
-	const int32 DesiredClusterCount = FMath::Max(1, Config.ClusterCount);
+	const FVector SafeChunkCenter = ChunkRelativeCenter;
+	const float SafeHalfSize = FMath::Max(0.0f, ChunkHalfSize);
+
+	const int32 DesiredInstanceCount = TotalChunkCount > 0
+												   ? FMath::CeilToInt(static_cast<float>(Config.InstanceCount) / TotalChunkCount)
+												   : Config.InstanceCount;
+	const int32 DesiredClusterCountRaw = TotalChunkCount > 0
+												 ? FMath::CeilToInt(static_cast<float>(Config.ClusterCount) / TotalChunkCount)
+												 : Config.ClusterCount;
+	const int32 DesiredClusterCount = FMath::Max(1, DesiredClusterCountRaw);
 	const float ClampedSpread = FMath::Max(0.0f, Config.ClusterSpread);
 
 	Instances->ClearInstances();
@@ -128,7 +226,14 @@ void UPlanetFoliage::GenerateInstancesForLayer(const FFoliageLayerConfig& Config
 		if (InstancesInCluster <= 0)
 			continue;
 
-		const FVector ClusterDirection = FMath::VRand().GetSafeNormal();
+		const FVector RandomChunkPoint = SafeChunkCenter + FVector(FMath::FRandRange(-SafeHalfSize, SafeHalfSize),
+																   FMath::FRandRange(-SafeHalfSize, SafeHalfSize),
+																   FMath::FRandRange(-SafeHalfSize, SafeHalfSize));
+		FVector ClusterDirection = RandomChunkPoint.GetSafeNormal();
+		if (ClusterDirection.IsNearlyZero())
+		{
+			ClusterDirection = FMath::VRand().GetSafeNormal();
+		}
 
 		for (int32 InstanceIndex = 0; InstanceIndex < InstancesInCluster; ++InstanceIndex)
 		{
@@ -187,6 +292,46 @@ APlanet* UPlanetFoliage::ResolvePlanetActor() const
 	return Cast<APlanet>(GetOwner());
 }
 
+const UVoxelManager* UPlanetFoliage::ResolveVoxelManager() const
+{
+	if (const APlanet* Planet = ResolvePlanetActor())
+	{
+		return Planet->VoxelManager.Get();
+	}
+
+	return nullptr;
+}
+
+int32 UPlanetFoliage::ResolveChunkNum(const APlanet* PlanetActor, const UVoxelManager* VoxelManager) const
+{
+	if (VoxelManager && VoxelManager->GetChunkNum() > 0)
+	{
+		return VoxelManager->GetChunkNum();
+	}
+
+	return PlanetActor ? FMath::Max(1, PlanetActor->ChunkNum) : 1;
+}
+
+int32 UPlanetFoliage::ResolveCellSize(const APlanet* PlanetActor, const UVoxelManager* VoxelManager) const
+{
+	if (VoxelManager && VoxelManager->GetCellSize() > 0)
+	{
+		return VoxelManager->GetCellSize();
+	}
+
+	return PlanetActor ? FMath::Max(1, PlanetActor->CellSize) : 1;
+}
+
+int32 UPlanetFoliage::ResolveCellNum(const APlanet* PlanetActor, const UVoxelManager* VoxelManager) const
+{
+	if (VoxelManager && VoxelManager->GetCellNum() > 0)
+	{
+		return VoxelManager->GetCellNum();
+	}
+
+	return PlanetActor ? FMath::Max(1, PlanetActor->CellNum) : 1;
+}
+
 float UPlanetFoliage::ResolvePlanetRadius(const APlanet* PlanetActor) const
 {
 	if (PlanetActor)
@@ -212,4 +357,57 @@ float UPlanetFoliage::CalculateRandomScale(const FFoliageLayerConfig& Config) co
 	const float SafeMinScale = FMath::Max(0.0f, Config.MinUniformScale);
 	const float SafeMaxScale = FMath::Max(SafeMinScale, Config.MaxUniformScale);
 	return FMath::FRandRange(SafeMinScale, SafeMaxScale);
+}
+
+void UPlanetFoliage::ClearChunkFoliage()
+{
+	CachedChunkHalfSize = 0.0f;
+
+	for (TObjectPtr<UHierarchicalInstancedStaticMeshComponent>& Component : SpawnedChunkComponents)
+	{
+		if (Component)
+		{
+			Component->DestroyComponent();
+		}
+	}
+	SpawnedChunkComponents.Reset();
+	ChunkFoliageMap.Reset();
+
+	if (GrassInstances)
+	{
+		GrassInstances->ClearInstances();
+		GrassInstances->SetRelativeLocation(FVector::ZeroVector);
+	}
+	if (FlowerInstances)
+	{
+		FlowerInstances->ClearInstances();
+		FlowerInstances->SetRelativeLocation(FVector::ZeroVector);
+	}
+	if (TreeInstances)
+	{
+		TreeInstances->ClearInstances();
+		TreeInstances->SetRelativeLocation(FVector::ZeroVector);
+	}
+	if (RockInstances)
+	{
+		RockInstances->ClearInstances();
+		RockInstances->SetRelativeLocation(FVector::ZeroVector);
+	}
+}
+
+UHierarchicalInstancedStaticMeshComponent* UPlanetFoliage::CreateChunkComponent(const FString& BaseName)
+{
+	const FString UniqueName = FString::Printf(TEXT("%s_%d"), *BaseName, SpawnedChunkComponents.Num());
+	UHierarchicalInstancedStaticMeshComponent* NewComponent = NewObject<UHierarchicalInstancedStaticMeshComponent>(GetOwner(), *UniqueName);
+	if (!NewComponent)
+	{
+		return nullptr;
+	}
+
+	NewComponent->SetupAttachment(this);
+	NewComponent->RegisterComponent();
+	NewComponent->SetMobility(EComponentMobility::Movable);
+
+	SpawnedChunkComponents.Add(NewComponent);
+	return NewComponent;
 }
