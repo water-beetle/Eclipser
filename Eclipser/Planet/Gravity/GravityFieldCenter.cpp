@@ -1,8 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-#include "Character/GravityBody.h"
 #include "GravityFieldCenter.h"
-
+#include "Character/GravityBody.h"
 
 // Sets default values for this component's properties
 UGravityFieldCenter::UGravityFieldCenter()

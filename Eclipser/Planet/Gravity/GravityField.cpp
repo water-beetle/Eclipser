@@ -1,8 +1,8 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
+#include "GravityField.h"
 #include "Character/SpaceCharacter.h"
 #include "Character/GravityBody.h"
-#include "GravityField.h"
 
 
 // Sets default values for this component's properties

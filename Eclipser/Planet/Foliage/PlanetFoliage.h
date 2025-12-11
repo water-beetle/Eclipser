@@ -36,6 +36,11 @@ struct FFoliageLayerConfig
 	UPROPERTY(EditAnywhere, Category="Foliage", meta = (ClampMin = "0.0"))
 	float MaxUniformScale = 1.1f;
 
+	// false일 경우 mesh의 boundbox와 겹치는 foliage 삭제,
+	// tree같은 경우는 bound가 커서 거리 계산으로 삭제해야함
+	UPROPERTY(EditAnywhere, Category="Foliage|Collision")
+	bool bRemoveByDistance = false;	
+	
 	UPROPERTY(EditAnywhere, Category="Foliage|Collision")
 	bool bEnableCollision = false;
 
@@ -75,10 +80,10 @@ protected:
 private:
 	void GenerateFoliageInstances();
 	void RemoveInstancesFromComponent(UHierarchicalInstancedStaticMeshComponent* Instances, const FVector& WorldCenter,
-										  float Radius) const;
+										  float Radius, bool bRemoveByDistance) const;
 	void GenerateInstancesForLayer(const FFoliageLayerConfig& Config, UHierarchicalInstancedStaticMeshComponent* Instances,
-									   const FVector& ChunkRelativeCenter, float ChunkHalfSize, int32 TotalChunkCount,
-									   const FVector& PlanetCenter, float PlanetRadius, APlanet* PlanetActor);
+																		   const FVector& ChunkRelativeCenter, float ChunkHalfSize,
+																		   const FVector& PlanetCenter, float PlanetRadius, APlanet* PlanetActor);
 	void ConfigureInstanceComponent(const FFoliageLayerConfig& Config, UHierarchicalInstancedStaticMeshComponent* Instances) const;
 	APlanet* ResolvePlanetActor() const;
 	const UVoxelManager* ResolveVoxelManager() const;

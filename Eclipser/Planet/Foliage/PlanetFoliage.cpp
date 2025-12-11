@@ -56,10 +56,10 @@ void UPlanetFoliage::RemoveInstancesWithinRadius(const FVector& WorldCenter, flo
 
 	if (ChunkFoliageMap.Num() == 0 || ChunkRadius <= KINDA_SMALL_NUMBER)
 	{
-		RemoveInstancesFromComponent(GrassInstances, WorldCenter, SafeRadius);
-		RemoveInstancesFromComponent(FlowerInstances, WorldCenter, SafeRadius);
-		RemoveInstancesFromComponent(TreeInstances, WorldCenter, SafeRadius);
-		RemoveInstancesFromComponent(RockInstances, WorldCenter, SafeRadius);
+		RemoveInstancesFromComponent(GrassInstances, WorldCenter, SafeRadius, GrassConfig.bRemoveByDistance);
+		RemoveInstancesFromComponent(FlowerInstances, WorldCenter, SafeRadius, Flowerconfig.bRemoveByDistance);
+		RemoveInstancesFromComponent(TreeInstances, WorldCenter, SafeRadius, TreeConfig.bRemoveByDistance);
+		RemoveInstancesFromComponent(RockInstances, WorldCenter, SafeRadius, RockConfig.bRemoveByDistance);
 		return;
 	}
 
@@ -76,10 +76,10 @@ void UPlanetFoliage::RemoveInstancesWithinRadius(const FVector& WorldCenter, flo
 			}
 		}
 
-		RemoveInstancesFromComponent(Pair.Value.Grass, WorldCenter, SafeRadius);
-		RemoveInstancesFromComponent(Pair.Value.Flower, WorldCenter, SafeRadius);
-		RemoveInstancesFromComponent(Pair.Value.Tree, WorldCenter, SafeRadius);
-		RemoveInstancesFromComponent(Pair.Value.Rock, WorldCenter, SafeRadius);
+		RemoveInstancesFromComponent(Pair.Value.Grass, WorldCenter, SafeRadius, GrassConfig.bRemoveByDistance);
+		RemoveInstancesFromComponent(Pair.Value.Flower, WorldCenter, SafeRadius, Flowerconfig.bRemoveByDistance);
+		RemoveInstancesFromComponent(Pair.Value.Tree, WorldCenter, SafeRadius, TreeConfig.bRemoveByDistance);
+		RemoveInstancesFromComponent(Pair.Value.Rock, WorldCenter, SafeRadius, RockConfig.bRemoveByDistance);
 	}
 }
 
@@ -147,13 +147,13 @@ void UPlanetFoliage::GenerateFoliageInstances()
 				}
 
 				GenerateInstancesForLayer(GrassConfig, Entry.Grass, ChunkRelativeCenter, CachedChunkHalfSize,
-				                          TotalChunkCount, PlanetCenter, PlanetRadius, PlanetActor);
+														  PlanetCenter, PlanetRadius, PlanetActor);
 				GenerateInstancesForLayer(Flowerconfig, Entry.Flower, ChunkRelativeCenter, CachedChunkHalfSize,
-				                          TotalChunkCount, PlanetCenter, PlanetRadius, PlanetActor);
+										  PlanetCenter, PlanetRadius, PlanetActor);
 				GenerateInstancesForLayer(TreeConfig, Entry.Tree, ChunkRelativeCenter, CachedChunkHalfSize,
-				                          TotalChunkCount, PlanetCenter, PlanetRadius, PlanetActor);
+										  PlanetCenter, PlanetRadius, PlanetActor);
 				GenerateInstancesForLayer(RockConfig, Entry.Rock, ChunkRelativeCenter, CachedChunkHalfSize,
-				                          TotalChunkCount, PlanetCenter, PlanetRadius, PlanetActor);
+										  PlanetCenter, PlanetRadius, PlanetActor);
 
 				Entry.ChunkCenterWorld = PlanetCenter + ChunkRelativeCenter;
 				ChunkFoliageMap.Add(ChunkIndex, Entry);
@@ -163,14 +163,60 @@ void UPlanetFoliage::GenerateFoliageInstances()
 }
 
 void UPlanetFoliage::RemoveInstancesFromComponent(UHierarchicalInstancedStaticMeshComponent* Instances,
-	const FVector& WorldCenter, float Radius) const
+	const FVector& WorldCenter, float Radius, bool bRemoveByDistance) const
 {
 	if (!Instances)
 	{
 		return;
 	}
 
-	TArray<int32> InstanceIndices = Instances->GetInstancesOverlappingSphere(WorldCenter, Radius, true);
+	// 거리기반
+	if (bRemoveByDistance)
+	{
+		const float RadiusSq = Radius * Radius;
+		const int32 InstanceCount = Instances->GetInstanceCount();
+
+		if (InstanceCount <= 0)
+		{
+			return;
+		}
+
+		TArray<int32> RemoveIndices;
+		RemoveIndices.Reserve(InstanceCount);
+
+		for (int32 Index = 0; Index < InstanceCount; ++Index)
+		{
+			FTransform T;
+			if (!Instances->GetInstanceTransform(Index, T, true))
+			{
+				continue;
+			}
+
+			const FVector Loc = T.GetLocation();
+			if (FVector::DistSquared(Loc, WorldCenter) <= RadiusSq)
+			{
+				RemoveIndices.Add(Index);
+			}
+		}
+
+		if (RemoveIndices.IsEmpty())
+		{
+			return;
+		}
+
+		// 인덱스가 밀리지 않게 뒤에서부터 제거
+		RemoveIndices.Sort();
+		for (int32 i = RemoveIndices.Num() - 1; i >= 0; --i)
+		{
+			Instances->RemoveInstance(RemoveIndices[i]);
+		}
+
+		return;
+	}
+
+	// 바운딩박스 기반
+	TArray<int32> InstanceIndices =
+		Instances->GetInstancesOverlappingSphere(WorldCenter, Radius, true);
 
 	if (InstanceIndices.IsEmpty())
 	{
@@ -181,8 +227,8 @@ void UPlanetFoliage::RemoveInstancesFromComponent(UHierarchicalInstancedStaticMe
 }
 
 void UPlanetFoliage::GenerateInstancesForLayer(const FFoliageLayerConfig& Config,
-	UHierarchicalInstancedStaticMeshComponent* Instances, const FVector& ChunkRelativeCenter, float ChunkHalfSize,
-	int32 TotalChunkCount, const FVector& PlanetCenter, float PlanetRadius, APlanet* PlanetActor)
+UHierarchicalInstancedStaticMeshComponent* Instances, const FVector& ChunkRelativeCenter, float ChunkHalfSize,
+	const FVector& PlanetCenter, float PlanetRadius, APlanet* PlanetActor)
 {
 	if (!Instances)
 	{
@@ -207,13 +253,8 @@ void UPlanetFoliage::GenerateInstancesForLayer(const FFoliageLayerConfig& Config
 	const float SafeHalfSize = FMath::Max(0.0f, ChunkHalfSize);
 	const FVector ChunkCenterWorld = PlanetCenter + SafeChunkCenter;
 
-	const int32 DesiredInstanceCount = TotalChunkCount > 0
-												   ? FMath::CeilToInt(static_cast<float>(Config.InstanceCount) / TotalChunkCount)
-												   : Config.InstanceCount;
-	const int32 DesiredClusterCountRaw = TotalChunkCount > 0
-												 ? FMath::CeilToInt(static_cast<float>(Config.ClusterCount) / TotalChunkCount)
-												 : Config.ClusterCount;
-	const int32 DesiredClusterCount = FMath::Max(1, DesiredClusterCountRaw);
+	const int32 DesiredInstanceCount = Config.InstanceCount;
+	const int32 DesiredClusterCount = FMath::Max(1, Config.ClusterCount);
 	const float ClampedSpread = FMath::Max(0.0f, Config.ClusterSpread);
 
 	Instances->ClearInstances();
