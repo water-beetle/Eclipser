@@ -111,7 +111,7 @@ void UPlanetFoliage::GenerateFoliageInstances()
 	const int32 ChunkSize = CellSize * CellNum;
 	CachedChunkHalfSize = static_cast<float>(ChunkSize) * 0.5f;
 
-	const int32 TotalChunkCount = FMath::Max(1, ChunkNum * ChunkNum * ChunkNum);
+	const TWeakObjectPtr<APlanet> PlanetActorWeak = PlanetActor;
 
 	for (int32 X = 0; X < ChunkNum; ++X)
 	{
@@ -146,14 +146,56 @@ void UPlanetFoliage::GenerateFoliageInstances()
 					Entry.Rock->SetRelativeLocation(ChunkRelativeCenter);
 				}
 
-				GenerateInstancesForLayer(GrassConfig, Entry.Grass, ChunkRelativeCenter, CachedChunkHalfSize,
-														  PlanetCenter, PlanetRadius, PlanetActor);
-				GenerateInstancesForLayer(Flowerconfig, Entry.Flower, ChunkRelativeCenter, CachedChunkHalfSize,
-										  PlanetCenter, PlanetRadius, PlanetActor);
-				GenerateInstancesForLayer(TreeConfig, Entry.Tree, ChunkRelativeCenter, CachedChunkHalfSize,
-										  PlanetCenter, PlanetRadius, PlanetActor);
-				GenerateInstancesForLayer(RockConfig, Entry.Rock, ChunkRelativeCenter, CachedChunkHalfSize,
-										  PlanetCenter, PlanetRadius, PlanetActor);
+				auto EnqueueTask = [&](const FFoliageLayerConfig& Config,
+				                       UHierarchicalInstancedStaticMeshComponent* TargetComponent)
+				{
+					if (!TargetComponent)
+					{
+						return;
+					}
+
+					if (!Config.Mesh)
+					{
+						ConfigureInstanceComponent(Config, TargetComponent);
+						return;
+					}
+
+					const TWeakObjectPtr<UHierarchicalInstancedStaticMeshComponent> ComponentWeak = TargetComponent;
+
+					Async(EAsyncExecution::ThreadPool,
+					      [this, Config, ComponentWeak, ChunkRelativeCenter, ChunkHalfSize = CachedChunkHalfSize,
+						      PlanetCenter, PlanetRadius, PlanetActorWeak]()
+					      {
+						      TArray<FTransform> Transforms = GenerateTransformsForLayer(Config, ChunkRelativeCenter,
+							      ChunkHalfSize, PlanetCenter, PlanetRadius, PlanetActorWeak);
+
+						      AsyncTask(ENamedThreads::GameThread,
+						                [this, Config, ComponentWeak, Transforms = MoveTemp(Transforms)]() mutable
+						                {
+							                if (!ComponentWeak.IsValid())
+							                {
+								                return;
+							                }
+
+							                UHierarchicalInstancedStaticMeshComponent* Component = ComponentWeak.Get();
+
+							                ConfigureInstanceComponent(Config, Component);
+
+							                if (!Transforms.IsEmpty())
+							                {
+							                	for (const FTransform& T : Transforms)
+							                	{
+													Component->AddInstanceWorldSpace(T);
+												}
+							                }
+						                });
+					      });
+				};
+
+				EnqueueTask(GrassConfig, Entry.Grass);
+				EnqueueTask(Flowerconfig, Entry.Flower);
+				EnqueueTask(TreeConfig, Entry.Tree);
+				EnqueueTask(RockConfig, Entry.Rock);
 
 				Entry.ChunkCenterWorld = PlanetCenter + ChunkRelativeCenter;
 				ChunkFoliageMap.Add(ChunkIndex, Entry);
@@ -226,27 +268,25 @@ void UPlanetFoliage::RemoveInstancesFromComponent(UHierarchicalInstancedStaticMe
 	Instances->RemoveInstances(InstanceIndices);
 }
 
-void UPlanetFoliage::GenerateInstancesForLayer(const FFoliageLayerConfig& Config,
-UHierarchicalInstancedStaticMeshComponent* Instances, const FVector& ChunkRelativeCenter, float ChunkHalfSize,
-	const FVector& PlanetCenter, float PlanetRadius, APlanet* PlanetActor)
+TArray<FTransform> UPlanetFoliage::GenerateTransformsForLayer(const FFoliageLayerConfig& Config,
+		const FVector& ChunkRelativeCenter, float ChunkHalfSize, const FVector& PlanetCenter, float PlanetRadius,
+		TWeakObjectPtr<APlanet> PlanetActor) const
 {
-	if (!Instances)
-	{
-		return;
-	}
+	TArray<FTransform> Result;
 
-	ConfigureInstanceComponent(Config, Instances);
+	if (!PlanetActor.IsValid())
+	{
+		return Result;
+	}
 
 	if (!Config.Mesh)
 	{
-		Instances->ClearInstances();
-		return;
+		return Result;
 	}
 
-	if (PlanetRadius <= KINDA_SMALL_NUMBER || !PlanetActor)
+	if (PlanetRadius <= KINDA_SMALL_NUMBER)
 	{
-		Instances->ClearInstances();
-		return;
+		return Result;
 	}
 
 	const FVector SafeChunkCenter = ChunkRelativeCenter;
@@ -256,8 +296,6 @@ UHierarchicalInstancedStaticMeshComponent* Instances, const FVector& ChunkRelati
 	const int32 DesiredInstanceCount = Config.InstanceCount;
 	const int32 DesiredClusterCount = FMath::Max(1, Config.ClusterCount);
 	const float ClampedSpread = FMath::Max(0.0f, Config.ClusterSpread);
-
-	Instances->ClearInstances();
 
 	const int32 BaseClusterSize = DesiredInstanceCount / DesiredClusterCount;
 	int32 Remainder = DesiredInstanceCount % DesiredClusterCount;
@@ -269,8 +307,8 @@ UHierarchicalInstancedStaticMeshComponent* Instances, const FVector& ChunkRelati
 			continue;
 
 		const FVector RandomChunkPoint = SafeChunkCenter + FVector(FMath::FRandRange(-SafeHalfSize, SafeHalfSize),
-																   FMath::FRandRange(-SafeHalfSize, SafeHalfSize),
-																   FMath::FRandRange(-SafeHalfSize, SafeHalfSize));
+		                                                           FMath::FRandRange(-SafeHalfSize, SafeHalfSize),
+		                                                           FMath::FRandRange(-SafeHalfSize, SafeHalfSize));
 		FVector ClusterDirection = RandomChunkPoint.GetSafeNormal();
 		if (ClusterDirection.IsNearlyZero())
 		{
@@ -299,9 +337,11 @@ UHierarchicalInstancedStaticMeshComponent* Instances, const FVector& ChunkRelati
 			InstanceTransform.SetLocation(Location);
 			InstanceTransform.SetScale3D(FVector(CalculateRandomScale(Config)));
 
-			Instances->AddInstanceWorldSpace(InstanceTransform);
+			Result.Add(InstanceTransform);
 		}
 	}
+
+	return Result;
 }
 
 void UPlanetFoliage::ConfigureInstanceComponent(const FFoliageLayerConfig& Config,

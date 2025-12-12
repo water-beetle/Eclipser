@@ -81,9 +81,9 @@ private:
 	void GenerateFoliageInstances();
 	void RemoveInstancesFromComponent(UHierarchicalInstancedStaticMeshComponent* Instances, const FVector& WorldCenter,
 										  float Radius, bool bRemoveByDistance) const;
-	void GenerateInstancesForLayer(const FFoliageLayerConfig& Config, UHierarchicalInstancedStaticMeshComponent* Instances,
-																		   const FVector& ChunkRelativeCenter, float ChunkHalfSize,
-																		   const FVector& PlanetCenter, float PlanetRadius, APlanet* PlanetActor);
+	TArray<FTransform> GenerateTransformsForLayer(const FFoliageLayerConfig& Config,
+			const FVector& ChunkRelativeCenter, float ChunkHalfSize, const FVector& PlanetCenter, float PlanetRadius,
+			TWeakObjectPtr<APlanet> PlanetActor) const;
 	void ConfigureInstanceComponent(const FFoliageLayerConfig& Config, UHierarchicalInstancedStaticMeshComponent* Instances) const;
 	APlanet* ResolvePlanetActor() const;
 	const UVoxelManager* ResolveVoxelManager() const;
