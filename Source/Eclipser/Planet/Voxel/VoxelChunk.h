@@ -1,0 +1,71 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "VoxelManager.h"
+#include "Components/DynamicMeshComponent.h"
+#include "Components/SceneComponent.h"
+#include "Defines/VoxelStructs.h"
+#include "Planet/Voxel/Defines/VoxelStructs.h"
+#include "VoxelChunk.generated.h"
+
+
+/*
+ * 용어 정의
+ * Voxel : (ChunkNum,ChunkNum,ChunkNum) 만큼의 Chunk로 이루어진 정육면체
+ * 
+ * Chunk : (CellNum, CellNum, CellNum) 만큼의 Cell로 이루어진 정육면체
+ *
+ * Cell : (CellSize, CellSize, CellSize) 크기인 정육면체 -> Planet에서 사용하는 기본 단위 사각형
+ */
+
+UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
+class ECLIPSER_API UVoxelChunk : public UDynamicMeshComponent
+{
+	GENERATED_BODY()
+
+public:
+	// Sets default values for this component's properties
+	UVoxelChunk();
+
+	void GenerateChunkMesh(const FChunkSettingInfo& Info, FChunkBuildResult&& Result);
+	static FChunkBuildResult GenerateChunkData(const FChunkSettingInfo& Info, UVoxelManager* Manager);
+
+	void InitializeChunk(const FChunkSettingInfo& Info);
+	
+	void SetVoxelManager(UVoxelManager* VoxelManager){ OwningManager = VoxelManager; }
+	UVoxelManager* GetVoxelManager() const {return OwningManager; }
+	int GetRequestedLODLevel() const {return RequestedLODLevel; };
+	int32 GetCurrentLODLevel() const { return CurrentLODLevel; }
+
+	FChunkSettingInfo MakeChunkSettingInfoForLOD(int32 LODLevel) const;
+	void SetRequestedLODLevel(int InLODLevel);
+	
+	void Sculpt(const FVector& ImpactPoint, float radius);;
+	
+
+protected:
+	// Called when the game starts
+	virtual void BeginPlay() override;
+	virtual void OnRegister() override;
+public:
+	// Called every frame
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+	                           FActorComponentTickFunction* ThisTickFunction) override;
+	static float CalculateDensity(const FVector& Pos, int Radius, int MaxRadius, const FPlanetNoiseSettings* NoiseSettings);
+
+private:
+	FVoxelData CachedMeshData;
+	TArray<FVertexDensity> ChunkDensityData;
+	//FVoxelDataMappings Mappings;
+	FChunkSettingInfo ChunkInfo;
+	int32 CurrentLODLevel = 1;
+	int32 RequestedLODLevel = 1;
+	
+	void UpdateMesh(const FVoxelData& VoxelMeshData);
+	static void GenerateChunkDensityData(const FChunkSettingInfo& Info, TArray<FVertexDensity>& OutDensityData, UVoxelManager* Manager);
+
+	UPROPERTY()
+	UVoxelManager* OwningManager = nullptr;
+};
