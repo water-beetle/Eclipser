@@ -4,13 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-#include "HUDWidget.generated.h"
+#include "Inv_HudWidget.generated.h"
 
 /**
  * 
  */
 UCLASS()
-class ECLIPSER_API UHUDWidget : public UUserWidget
+class INVENTORY_API UInv_HudWidget : public UUserWidget
 {
 	GENERATED_BODY()
 };
