@@ -61,15 +61,13 @@ void AInv_PlayerController::TraceForItem()
 	if (!UGameplayStatics::DeprojectScreenToWorld(this, ViewportCenter, TraceStart, Forward)) return;
 
 	const FVector TraceEnd = TraceStart + Forward * MaxItemTraceDistance;
-	TArray<FHitResult> Hits;
-	FCollisionShape Sphere = FCollisionShape::MakeSphere(ItemTraceRadius);
+	FHitResult Hit;
 
-	bool bHit = GetWorld()->SweepMultiByChannel(
-		Hits,
-		TraceStart,
-		TraceEnd,
-		FQuat::Identity,
-		ItemTraceChannel,
-		Sphere
-	);
+	bool bHit = GetWorld()->LineTraceSingleByChannel(Hit,TraceStart,TraceEnd,ItemTraceChannel);
+
+	PreviousItem = CurrentItem;
+	CurrentItem = Hit.GetActor();
+
+	if (PreviousItem == CurrentItem) return;
+	
 }

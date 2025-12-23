@@ -35,10 +35,13 @@ private:
 
 private:
 	void TraceForItem();
-
+	
 	UPROPERTY(EditDefaultsOnly, Category = "Inventory")
 	TEnumAsByte<ECollisionChannel> ItemTraceChannel;
 	
 	float MaxItemTraceDistance = 300.f;
-	float ItemTraceRadius = 50.0f;
+
+	TWeakObjectPtr<AActor> PreviousItem;
+	TWeakObjectPtr<AActor> CurrentItem;
+	
 };
