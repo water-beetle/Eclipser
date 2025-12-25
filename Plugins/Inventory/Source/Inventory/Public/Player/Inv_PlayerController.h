@@ -14,9 +14,12 @@ class INVENTORY_API AInv_PlayerController : public APlayerController
 {
 	GENERATED_BODY()
 
+	AInv_PlayerController();
+	
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
+	virtual void Tick(float DeltaTime) override;
 private:
 	void PrimaryInteract();
 	void CreateHudWidget();
@@ -35,9 +38,10 @@ private:
 
 private:
 	void TraceForItem();
+	void UpdatePickupMessagePosition();
 	
 	UPROPERTY(EditDefaultsOnly, Category = "Inventory")
-	TEnumAsByte<ECollisionChannel> ItemTraceChannel;
+	TEnumAsByte<ECollisionChannel> InteractionTraceChannel;
 	
 	float MaxItemTraceDistance = 300.f;
 

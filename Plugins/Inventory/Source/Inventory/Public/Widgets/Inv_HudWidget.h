@@ -19,5 +19,9 @@ public:
 	void ShowPickupMessage(const FString& Message);
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Inventory")
-	void HidePickupMessage(const FString& Message);
+	void HidePickupMessage();
+
+	UFUNCTION(BlueprintImplementableEvent, Category="Inventory")
+	void SetPickupMessageScreenPosition(const FVector2D& ScreenPos);
+	
 };
