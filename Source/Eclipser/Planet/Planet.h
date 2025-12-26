@@ -53,9 +53,6 @@ public:
 	UPROPERTY(EditAnywhere, Category="PlanetComponent")
 	TObjectPtr<UPlanetFoliage> FoliageComponent;
 
-	bool  GetSurfaceLocationAlong(const FVector& InDirection, FVector& OutLocation,
-															  const FVector* ChunkCenter = nullptr,
-															  float ChunkHalfSize = 0.0f) const;
 	
 private:
 	void UpdatePlanetConfiguration();

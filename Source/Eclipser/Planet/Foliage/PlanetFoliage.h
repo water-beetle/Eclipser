@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
+#include "Planet/Voxel/Defines/VoxelStructs.h"
 #include "PlanetFoliage.generated.h"
 
 class APlanet;
@@ -65,6 +66,14 @@ struct FChunkFoliageComponents
 	TObjectPtr<UHierarchicalInstancedStaticMeshComponent> Rock;
 };
 
+struct FPlanetSurfaceQueryData
+{
+	FVector PlanetCenter = FVector::ZeroVector;
+	int32 PlanetRadius = 0;
+	FPlanetNoiseSettings NoiseSettings;
+	bool bHasNoiseSettings = false;
+};
+
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class ECLIPSER_API UPlanetFoliage : public USceneComponent
 {
@@ -81,9 +90,8 @@ private:
 	void GenerateFoliageInstances();
 	void RemoveInstancesFromComponent(UHierarchicalInstancedStaticMeshComponent* Instances, const FVector& WorldCenter,
 										  float Radius, bool bRemoveByDistance) const;
-	TArray<FTransform> GenerateTransformsForLayer(const FFoliageLayerConfig& Config,
-			const FVector& ChunkRelativeCenter, float ChunkHalfSize, const FVector& PlanetCenter, float PlanetRadius,
-			TWeakObjectPtr<APlanet> PlanetActor) const;
+	TArray<FTransform> GenerateTransformsForLayer(const FFoliageLayerConfig& Config, const FVector& ChunkRelativeCenter,
+		float ChunkHalfSize, const FPlanetSurfaceQueryData& SurfaceData) const;
 	void ConfigureInstanceComponent(const FFoliageLayerConfig& Config, UHierarchicalInstancedStaticMeshComponent* Instances) const;
 	APlanet* ResolvePlanetActor() const;
 	const UVoxelManager* ResolveVoxelManager() const;

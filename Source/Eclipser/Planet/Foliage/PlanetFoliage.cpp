@@ -3,7 +3,97 @@
 #include "../Planet.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Engine/CollisionProfile.h"
+#include "Planet/Voxel/VoxelChunk.h"
 #include "Planet/Voxel/VoxelManager.h"
+
+namespace
+{
+	bool GetSurfaceLocationAlong(const FVector& InDirection, FVector& OutLocation,
+		const FPlanetSurfaceQueryData& SurfaceData,
+		const FVector* ChunkCenter = nullptr, float ChunkHalfSize = 0.0f)
+	{
+		FVector Dir = InDirection.GetSafeNormal();
+		if (Dir.IsNearlyZero())
+		{
+			return false;
+		}
+
+		const int32 BaseRadius = SurfaceData.PlanetRadius;
+		if (BaseRadius <= 0)
+		{
+			return false;
+		}
+
+		const FPlanetNoiseSettings& Noise = SurfaceData.NoiseSettings;
+		const bool bUseNoise = SurfaceData.bHasNoiseSettings && Noise.bEnableNoise && Noise.Octaves > 0;
+
+		if (!bUseNoise)
+		{
+			OutLocation = SurfaceData.PlanetCenter + Dir * BaseRadius;
+			return true;
+		}
+
+		const float InnerRadius = FMath::Max(0.0f, static_cast<float>(BaseRadius) - Noise.MaxDepression);
+		const float OuterRadius = static_cast<float>(BaseRadius) + Noise.MaxRaise;
+
+		if (InnerRadius >= OuterRadius)
+		{
+			OutLocation = SurfaceData.PlanetCenter + Dir * BaseRadius;
+			return true;
+		}
+
+		const int32 MaxRadius = FMath::CeilToInt(static_cast<float>(BaseRadius) + Noise.MaxRaise);
+		auto SampleDensity = [&](float R) -> float
+		{
+			const FVector LocalPos = Dir * R;
+			return UVoxelChunk::CalculateDensity(LocalPos, BaseRadius, MaxRadius, &Noise);
+		};
+
+		float R0 = InnerRadius;
+		float R1 = OuterRadius;
+		float D0 = SampleDensity(R0);
+		float D1 = SampleDensity(R1);
+
+		if ((D0 > 0.f && D1 > 0.f) || (D0 < 0.f && D1 < 0.f))
+		{
+			OutLocation = SurfaceData.PlanetCenter + Dir * BaseRadius;
+			return true;
+		}
+
+		for (int i = 0; i < 8; ++i)
+		{
+			const float MidR = 0.5f * (R0 + R1);
+			const float DMid = SampleDensity(MidR);
+
+			if ((D0 > 0.f && DMid > 0.f) || (D0 < 0.f && DMid < 0.f))
+			{
+				R0 = MidR;
+				D0 = DMid;
+			}
+			else
+			{
+				R1 = MidR;
+				D1 = DMid;
+			}
+		}
+
+		const float SurfaceR = 0.5f * (R0 + R1);
+		OutLocation = SurfaceData.PlanetCenter + Dir * SurfaceR;
+
+		if (ChunkCenter && ChunkHalfSize > KINDA_SMALL_NUMBER)
+		{
+			const FVector HalfExtent(ChunkHalfSize);
+			const FBox ChunkBounds(*ChunkCenter - HalfExtent, *ChunkCenter + HalfExtent);
+
+			if (!ChunkBounds.IsInside(OutLocation))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+}
 
 UPlanetFoliage::UPlanetFoliage()
 {
@@ -111,7 +201,14 @@ void UPlanetFoliage::GenerateFoliageInstances()
 	const int32 ChunkSize = CellSize * CellNum;
 	CachedChunkHalfSize = static_cast<float>(ChunkSize) * 0.5f;
 
-	const TWeakObjectPtr<APlanet> PlanetActorWeak = PlanetActor;
+	FPlanetSurfaceQueryData SurfaceData;
+	SurfaceData.PlanetCenter = PlanetCenter;
+	SurfaceData.PlanetRadius = PlanetRadius;
+	if (VoxelManager)
+	{
+		SurfaceData.NoiseSettings = VoxelManager->GetNoiseSettings();
+		SurfaceData.bHasNoiseSettings = true;
+	}
 
 	for (int32 X = 0; X < ChunkNum; ++X)
 	{
@@ -164,10 +261,10 @@ void UPlanetFoliage::GenerateFoliageInstances()
 
 					Async(EAsyncExecution::ThreadPool,
 					      [this, Config, ComponentWeak, ChunkRelativeCenter, ChunkHalfSize = CachedChunkHalfSize,
-						      PlanetCenter, PlanetRadius, PlanetActorWeak]()
+						      SurfaceData]()
 					      {
 						      TArray<FTransform> Transforms = GenerateTransformsForLayer(Config, ChunkRelativeCenter,
-							      ChunkHalfSize, PlanetCenter, PlanetRadius, PlanetActorWeak);
+							      ChunkHalfSize, SurfaceData);
 
 						      AsyncTask(ENamedThreads::GameThread,
 						                [this, Config, ComponentWeak, Transforms = MoveTemp(Transforms)]() mutable
@@ -268,30 +365,24 @@ void UPlanetFoliage::RemoveInstancesFromComponent(UHierarchicalInstancedStaticMe
 	Instances->RemoveInstances(InstanceIndices);
 }
 
-TArray<FTransform> UPlanetFoliage::GenerateTransformsForLayer(const FFoliageLayerConfig& Config,
-		const FVector& ChunkRelativeCenter, float ChunkHalfSize, const FVector& PlanetCenter, float PlanetRadius,
-		TWeakObjectPtr<APlanet> PlanetActor) const
+TArray<FTransform> UPlanetFoliage::GenerateTransformsForLayer(const FFoliageLayerConfig& Config, const FVector& ChunkRelativeCenter,
+		float ChunkHalfSize, const FPlanetSurfaceQueryData& SurfaceData) const
 {
 	TArray<FTransform> Result;
-
-	if (!PlanetActor.IsValid())
-	{
-		return Result;
-	}
 
 	if (!Config.Mesh)
 	{
 		return Result;
 	}
 
-	if (PlanetRadius <= KINDA_SMALL_NUMBER)
+	if (SurfaceData.PlanetRadius <= KINDA_SMALL_NUMBER)
 	{
 		return Result;
 	}
 
 	const FVector SafeChunkCenter = ChunkRelativeCenter;
 	const float SafeHalfSize = FMath::Max(0.0f, ChunkHalfSize);
-	const FVector ChunkCenterWorld = PlanetCenter + SafeChunkCenter;
+	const FVector ChunkCenterWorld = SurfaceData.PlanetCenter + SafeChunkCenter;
 
 	const int32 DesiredInstanceCount = Config.InstanceCount;
 	const int32 DesiredClusterCount = FMath::Max(1, Config.ClusterCount);
@@ -322,12 +413,12 @@ TArray<FTransform> UPlanetFoliage::GenerateTransformsForLayer(const FFoliageLaye
 				Direction = ClusterDirection;
 
 			FVector SurfaceLocation;
-			if (!PlanetActor->GetSurfaceLocationAlong(Direction, SurfaceLocation, &ChunkCenterWorld, SafeHalfSize))
+			if (!GetSurfaceLocationAlong(Direction, SurfaceLocation, SurfaceData, &ChunkCenterWorld, SafeHalfSize))
 			{
 				continue;
 			}
 
-			const FVector Normal = (SurfaceLocation - PlanetCenter).GetSafeNormal();
+			const FVector Normal = (SurfaceLocation - SurfaceData.PlanetCenter).GetSafeNormal();
 			const FVector Location = SurfaceLocation + Normal * Config.SurfaceOffset;
 
 			const FQuat Alignment = FRotationMatrix::MakeFromZ(Normal).ToQuat();
