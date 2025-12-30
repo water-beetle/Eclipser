@@ -3,8 +3,10 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputMappingContext.h"
 #include "Inventory.h"
-#include "Widgets/Inv_HudWidget.h"
+#include "Widgets/HUD/Inv_HudWidget.h"
 #include "Blueprint/UserWidget.h"
+#include "Interaction/Inv_HighlightableStaticMesh.h"
+#include "InventoryManagement/Components/Inv_InventoryComponent.h"
 #include "Items/Components/Inv_ItemComponent.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -13,6 +15,13 @@ AInv_PlayerController::AInv_PlayerController()
 	PrimaryActorTick.bCanEverTick = true;
 	MaxItemTraceDistance = 500.0f;
 	InteractionTraceChannel = ECollisionChannel::ECC_GameTraceChannel1;
+}
+
+void AInv_PlayerController::ToggleInventory()
+{
+	if (!InventoryComponent.IsValid()) return;
+
+	InventoryComponent->ToggleInventoryMenu();
 }
 
 void AInv_PlayerController::BeginPlay()
@@ -29,6 +38,8 @@ void AInv_PlayerController::BeginPlay()
 		}
 	}
 
+	InventoryComponent = FindComponentByClass<UInv_InventoryComponent>();
+	
 	CreateHudWidget();
 }
 
@@ -38,6 +49,7 @@ void AInv_PlayerController::SetupInputComponent()
 
 	UEnhancedInputComponent* EnhancedInputComponent = CastChecked<UEnhancedInputComponent>(InputComponent);
 	EnhancedInputComponent->BindAction(PrimaryInterAction, ETriggerEvent::Started, this, &AInv_PlayerController::PrimaryInteract);
+	EnhancedInputComponent->BindAction(ToggleInventoryAction, ETriggerEvent::Started, this, &AInv_PlayerController::ToggleInventory);
 }
 
 void AInv_PlayerController::Tick(float DeltaTime)
@@ -93,10 +105,25 @@ void AInv_PlayerController::TraceForItem()
 
 	if (CurrentItem.IsValid())
 	{
+		UActorComponent* Highlightable = CurrentItem->FindComponentByInterface(UInv_Highlightable::StaticClass());
+		if (IsValid(Highlightable))
+		{
+			IInv_Highlightable::Execute_Highlight(Highlightable);
+		}
+		
 		UInv_ItemComponent* ItemComponent = CurrentItem->FindComponentByClass<UInv_ItemComponent>();
 		if (!IsValid(ItemComponent)) return;
 
 		if (IsValid(HudWidget)) HudWidget->ShowPickupMessage(ItemComponent->GetPickupMessage());
+	}
+
+	if (PreviousItem.IsValid())
+	{
+		UActorComponent* Highlightable = PreviousItem->FindComponentByInterface(UInv_Highlightable::StaticClass());
+		if (IsValid(Highlightable))
+		{
+			IInv_Highlightable::Execute_UnHighlight(Highlightable);
+		}
 	}
 	
 }
