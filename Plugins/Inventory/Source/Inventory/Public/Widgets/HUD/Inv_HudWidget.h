@@ -6,6 +6,7 @@
 #include "Blueprint/UserWidget.h"
 #include "Inv_HudWidget.generated.h"
 
+class UInv_InfoMessage;
 /**
  * 
  */
@@ -23,5 +24,15 @@ public:
 
 	UFUNCTION(BlueprintImplementableEvent, Category="Inventory")
 	void SetPickupMessageScreenPosition(const FVector2D& ScreenPos);
+
+protected:
+	virtual void NativeOnInitialized() override;
+	
+private:
+	UPROPERTY(meta=(BindWidget))
+	TObjectPtr<UInv_InfoMessage> InfoMessage;
+
+	UFUNCTION()	
+	void OnNoRoom();
 	
 };

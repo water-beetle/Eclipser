@@ -12,6 +12,11 @@ UInv_InventoryComponent::UInv_InventoryComponent()
 
 }
 
+void UInv_InventoryComponent::TryAddItem(UInv_ItemComponent* ItemComponent)
+{
+	NoRoomInInventory.Broadcast();
+}
+
 void UInv_InventoryComponent::ToggleInventoryMenu()
 {
 	if (bInventoryMenuOpen)

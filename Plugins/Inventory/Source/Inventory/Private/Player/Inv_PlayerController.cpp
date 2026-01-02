@@ -5,6 +5,7 @@
 #include "Inventory.h"
 #include "Widgets/HUD/Inv_HudWidget.h"
 #include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Interaction/Inv_HighlightableStaticMesh.h"
 #include "InventoryManagement/Components/Inv_InventoryComponent.h"
 #include "Items/Components/Inv_ItemComponent.h"
@@ -62,7 +63,12 @@ void AInv_PlayerController::Tick(float DeltaTime)
 
 void AInv_PlayerController::PrimaryInteract()
 {
-	UE_LOG(LogTemp, Log, TEXT("Primary Interact"));
+	if (!CurrentItem.IsValid()) return;
+
+	UInv_ItemComponent* ItemComponent = CurrentItem->FindComponentByClass<UInv_ItemComponent>();
+	if (!IsValid(ItemComponent) || !InventoryComponent.IsValid()) return;
+
+	InventoryComponent->TryAddItem(ItemComponent);
 }
 
 void AInv_PlayerController::CreateHudWidget()
@@ -142,6 +148,10 @@ void AInv_PlayerController::UpdatePickupMessagePosition()
 		HudWidget->HidePickupMessage();
 		return;
 	}
+
+	const float Scale = UWidgetLayoutLibrary::GetViewportScale(this);
+	ScreenPos /= Scale;
+	
 	ScreenPos += FVector2D(20.f, -10.f);
 	HudWidget->SetPickupMessageScreenPosition(ScreenPos);
 }
